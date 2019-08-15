@@ -62,7 +62,7 @@ backend_config:
 > Remember that titles of the pages in one space are unique in Confluence.
 
 `space_key`
-:   The key of the space where the page will be created\edited.
+:   The key of the space where the page will be created/edited.
 
 `parent_id`
 :   ID of the parent page under which the new one should be created. *Only for not yet existing pages*.
