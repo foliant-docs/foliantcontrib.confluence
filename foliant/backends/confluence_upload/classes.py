@@ -1,6 +1,8 @@
 from pathlib import PosixPath
 from confluence.client import Confluence
 from confluence.models.content import ContentType
+from confluence.exceptions.resourcenotfound import ConfluenceResourceNotFound
+from confluence.exceptions.permissionerror import ConfluencePermissionError
 
 
 class PageNotAssignedError(Exception):
@@ -22,7 +24,27 @@ class Page:
             raise RuntimeError('Must specify either title&space or id of the article')
         self._title = title
         self._id = id_
+        self._check_params()
         self._get_info()
+
+    def _check_params(self):
+        '''
+        Check param values:
+        - Space exists;
+        - Parent exists.
+        '''
+        if self.space:
+            try:
+                self._con.get_space(self.space)
+            except ConfluenceResourceNotFound:
+                raise RuntimeError(f'Space with name "{self.space}" does not exist'
+                                   ' or you have insufficient privileges')
+        if self.parent_id:
+            try:
+                self._con.get_content_by_id(self.parent_id)
+            except ConfluenceResourceNotFound:
+                raise RuntimeError(f'Parent page with id "{self.parent_id}" does not exist'
+                                   ' or you have insufficient privileges')
 
     @property
     def exists(self):
@@ -54,7 +76,12 @@ class Page:
 
     def _get_info(self):
         if self._id:
-            content = self._con.get_content_by_id(self._id, expand=['version', 'body.storage'])
+            try:
+                content = self._con.get_content_by_id(self._id, expand=['version', 'body.storage'])
+            except ConfluenceResourceNotFound as e:
+                # foliant can't reraise this error because it requires
+                # additional parameters, so we reraise it is runtime error
+                raise RuntimeError(str(e))
             self._update_properties(content)
         else:
             try:
@@ -72,37 +99,44 @@ class Page:
         if self.title is None:
             self._title = content.title
 
-    def get_body(self):
-        if self.exists:
-            content = self._con.get_content_by_id(self._id, expand=('body.storage',))
-            return content.body.storage
-        else:
-            raise PageNotAssignedError
-
     def delete_all_attachments(self):
-        if self.exists:
-            res = self._con._get(f'content/{self.id}/child/attachment', {}, []).json()['results']
-            for att in res:
-                self._con._delete(f'content/{att["id"]}', {})
+        try:
+            if self.exists:
+                res = self._con._get(f'content/{self.id}/child/attachment', {}, []).json()['results']
+                for att in res:
+                    self._con._delete(f'content/{att["id"]}', {})
+        except ConfluencePermissionError:
+            raise RuntimeError(f"Don't have permissions to delete attachments on page {self.id}")
 
     def upload_attachment(self, filename: str or PosixPath):
         if not self.exists:
             raise PageNotAssignedError
-        return self._con.add_attachment(self._id, filename)
+        try:
+            res = self._con.add_attachment(self._id, filename)
+            return res
+        except ConfluencePermissionError:
+            raise RuntimeError(f"Don't have permissions to add attachments on page {self.id}")
 
     def upload_content(self, new_content: str, title: str = None):
-        if self.exists:  # TODO: catch tons of possible errors here
+        if self.exists:
+            try:
+                res = self._con.update_content(content_id=self._id,
+                                               content_type=ContentType.PAGE,
+                                               new_version=self.version + 1,
+                                               new_content=new_content,
+                                               new_title=title or self.title)
+                return res
+            except ConfluencePermissionError:
+                raise RuntimeError(f"Don't have permissions to edit page {self.id}")
 
-            return self._con.update_content(content_id=self._id,
-                                            content_type=ContentType.PAGE,
-                                            new_version=self.version + 1,
-                                            new_content=new_content,
-                                            new_title=title or self.title)
         else:
-            content = self._con.create_content(content_type=ContentType.PAGE,
-                                               title=title or self.title,
-                                               space_key=self._space,
-                                               content=new_content,
-                                               parent_content_id=self.parent_id)
-            self._update_properties(content)
-            return content
+            try:
+                content = self._con.create_content(content_type=ContentType.PAGE,
+                                                   title=title or self.title,
+                                                   space_key=self._space,
+                                                   content=new_content,
+                                                   parent_content_id=self.parent_id)
+                self._update_properties(content)
+                return content
+            except ConfluencePermissionError:
+                raise RuntimeError(f"Don't have permissions to create content in space {self._space}")

@@ -16,7 +16,7 @@ setup(
     description=SHORT_DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    version='0.1.0',
+    version='0.2.0',
     author='Daniil Minukhin',
     author_email='ddddsa@gmail.com',
     url='https://github.com/foliant-docs/foliantcontrib.confluence_upload',
@@ -26,6 +26,7 @@ setup(
     install_requires=[
         'foliant>=1.0.8',
         'confluence-rest-library',
+        'foliantcontrib.utils.combined_options>=1.0.6',
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",

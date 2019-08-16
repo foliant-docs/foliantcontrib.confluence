@@ -4,13 +4,21 @@ import os
 
 from subprocess import run, PIPE, STDOUT
 from pathlib import Path, PosixPath
+from requests.exceptions import ConnectionError
+from getpass import getpass
 
+from confluence.exceptions.authenticationerror import ConfluenceAuthenticationError
 from confluence.client import Confluence
 
 from foliant.utils import spinner
 from foliant.backends.base import BaseBackend
+from foliant.preprocessors.utils.combined_options import Options, val_type
 from .classes import Page
 from .ref_diff import find_place, cut_out_tag_fragment, fix_refs, add_ref
+
+
+class BadParamsException(Exception):
+    pass
 
 
 def unique_name(dest_dir: str or PosixPath, old_name: str) -> str:
@@ -51,13 +59,31 @@ class Backend(BaseBackend):
         super().__init__(*args, **kwargs)
 
         self._flat_src_file_path = self.working_dir / self._flat_src_file_name
-        self._confluence_config = self.config.get('backend_config', {}).get('confluence_upload', {})
         self._cachedir = self.project_path / '.confluencecache'
         self._attachments_dir = self._cachedir / 'attachments'
 
         self.logger = self.logger.getChild('confluence_upload')
 
         self.logger.debug(f'Backend inited: {self.__dict__}')
+
+    def _setup_config(self):
+        '''
+        Read backend options from foliant.yml and save them
+        into self._confluence_config as an Options object.
+        '''
+
+        config = self.config.get('backend_config', {}).get('confluence_upload', {})
+        self._confluence_config = Options(config,
+                                          validators={'host': val_type(str),
+                                                      'login': val_type(str),
+                                                      'password': val_type(str),
+                                                      'id': val_type([str, int]),
+                                                      'parent_id': val_type([str, int]),
+                                                      'title': val_type(str),
+                                                      'space_key': val_type(str),
+                                                      'pandoc_path': val_type(str)},
+                                          required=[('host', 'id',),
+                                                    ('host', 'title', 'space_key')])
 
     def _prepare_cache_dir(self):
         """Create a clean cache dir (old one is destroyed)"""
@@ -66,36 +92,52 @@ class Backend(BaseBackend):
         self._attachments_dir.mkdir()
 
     def _connect(self, host: str, login: str, password: str) -> Confluence:
-        """Convert source Markdown string into Confluence html and return it"""
-        self.con = Confluence(host.rstrip('/'), (login, password))
+        """Connect to Confluence server and test connection"""
+        host = host.rstrip('/')
+        self.con = Confluence(host, (login, password))
+        try:
+            self.con._get('space', {}, [])
+        except ConnectionError:
+            raise RuntimeError(f'Cannot connect to {host}')
+        except ConfluenceAuthenticationError:
+            raise RuntimeError(f'Wrong login or password for Confluence server')
 
     def _md_to_editor(self, con: Confluence, source: str):
-        """convert md source string to confluence editor format and return it"""
+        """
+        Convert md source string to confluence editor format (HTML) and return
+        it
+        """
         def _sub_image(match):
+            """
+            Convert image with pandoc <figcaption> tag into classic html image
+            with caption in alt=""
+            """
             image_caption = match.group('caption')
             image_path = match.group('path')
-            return f'<img src="{image_path}" alt="{image_caption}">'
+            result = f'<img src="{image_path}" alt="{image_caption}">'
+            self.logger.debug(f'\nold: {match.group(0)}\nnew: {result}')
         md_source = self._cachedir / '__all__.md'
         converted = self._cachedir / 'converted.html'
         with open(md_source, 'w') as f:
             f.write(source)
-        command = f'pandoc {md_source} -f markdown -t html -o {converted}'
+        pandoc = self._confluence_config.get('pandoc_path', 'pandoc')
+        command = f'{pandoc} {md_source} -f markdown -t html -o {converted}'
 
+        self.logger.debug('Converting MD to HTML with Pandoc, command:\n' +
+                          command)
         run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
 
         with open(converted) as f:
             result = f.read()
 
-        # fixing images
+        self.logger.debug('Fixing pandoc image captions.')
+
         image_pattern = re.compile(r'<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)')
         return image_pattern.sub(_sub_image, result)
-        # data = {'wiki': source}
-        # return con._post(path='/rest/tinymce/1/markdownxhtmlconverter', data=data, params={}).text
-        # return markdown(source)
 
     def process_images(self, source: str) -> str:
         """
-        Copy local images to cache dir with unique names, replace their MD
+        Copy local images to cache dir with unique names, replace their HTML
         definitions with confluence definitions
         """
 
@@ -107,17 +149,26 @@ class Backend(BaseBackend):
             if image_path.startswith('http'):
                 return image.group(0)
 
+            self.logger.debug(f'Found image: {image.group(0)}')
+
             new_name = unique_name(self._attachments_dir,
                                    os.path.split(image_path)[1])
             new_path = self._attachments_dir / new_name
+
+            self.logger.debug(f'Copying image into: {new_path}')
             shutil.copy(image_path, new_path)
             attachments.append(new_path)
 
             img_ref = f'<ac:image ac:title="{image_caption}"><ri:attachment ri:filename="{new_name}"/></ac:image>'
+
+            self.logger.debug(f'Converted image ref: {img_ref}')
             return img_ref
-        # image_pattern = re.compile(r'\!\[(?P<caption>.*)\]\((?P<path>((?!:\/\/).)+)\)')
+
         image_pattern = re.compile(r'<img src="(?P<path>.+?)" +(?:alt="(?P<caption>.*?)")?.+?>')
         attachments = []
+
+        self.logger.debug('Processing images')
+
         return image_pattern.sub(_sub, source), attachments
 
     def add_comments(self, page: Page, new_content: str):
@@ -211,7 +262,16 @@ class Backend(BaseBackend):
     def make(self, target: str) -> str:
         with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
             try:
+                self._setup_config()
                 self._prepare_cache_dir()
+                if "login" not in self._confluence_config:
+                    msg = f"Please input login for {self._confluence_config['host']}:\n"
+                    msg = '\n!!! User input required !!!\n' + msg
+                    self._confluence_config['login'] = input(msg)
+                if "password" not in self._confluence_config:
+                    msg = f"Please input password for {self._confluence_config['login']}:\n"
+                    msg = '\n!!! User input required !!!\n' + msg
+                    self._confluence_config['password'] = getpass(msg)
                 if target == 'confluence':
                     return self._build_and_upload()
                 else:

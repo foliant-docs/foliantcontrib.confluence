@@ -42,16 +42,17 @@ backend_config:
     title: Title of the page
     space_key: "~user"
     parent_id: 124442
+    pandoc_path: pandoc
 ```
 
 `host`
 :   **Required** Host of your confluence server.
 
 `login`
-:   **Required** Login of the user who has the rights to create and update pages.
+:   Login of the user who has the rights to create and update pages. If login is not supplied, it will be prompted during build
 
 `password`
-:   **Required** Password of the user.
+:   Password of the user. If password is not supplied, it will be prompted during build
 
 `id`
 :   ID of the page into which the content will be uploaded. *Only for already existing pages*
@@ -66,6 +67,9 @@ backend_config:
 
 `parent_id`
 :   ID of the parent page under which the new one should be created. *Only for not yet existing pages*.
+
+`pandoc_path`
+:   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
 
 ## Creating pages with confluence_upload
 
