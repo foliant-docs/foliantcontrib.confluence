@@ -1,3 +1,6 @@
+![](https://img.shields.io/pypi/v/foliantcontrib.confluence_upload.svg)
+
+
 # confluence_upload backend for Foliant
 
 confluence_upload backend generates a confluence article and uploads it into your confluence server. With it you can create and edit pages in Confluence based on your Foliant project.
