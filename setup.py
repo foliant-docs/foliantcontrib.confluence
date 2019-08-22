@@ -27,7 +27,7 @@ setup(
         'foliant>=1.0.8',
         'confluence-rest-library',
         'foliantcontrib.utils.combined_options>=1.0.6',
-        'foliantcontrib.meta',
+        'foliantcontrib.meta>=1.1.0',
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
