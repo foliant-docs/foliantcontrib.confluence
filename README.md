@@ -1,6 +1,5 @@
 ![](https://img.shields.io/pypi/v/foliantcontrib.confluence_upload.svg)
 
-
 # confluence_upload backend for Foliant
 
 confluence_upload backend generates a confluence article and uploads it into your confluence server. With it you can create and edit pages in Confluence based on your Foliant project.
@@ -15,11 +14,11 @@ This backend adds the `confluence` target for your Foliant `make` command.
 $ pip install foliantcontrib.confluence_upload
 ```
 
-> confluence_upload backend requires [Pandoc](https://pandoc.org/) to be installed in your system.
+> confluence_upload backend requires [Pandoc](https://pandoc.org/) to be installed in your system. Pandoc is needed to convert Markdown into HTML.
 
 ## Usage
 
-To upload a Foliant project to Confluence server use this command:
+To upload a Foliant project to Confluence server use `make confluence` command:
 
 ```bash
 $ foliant make confluence
@@ -41,6 +40,8 @@ backend_config:
     host: 'https://my_confluence_server.org'
     login: user
     password: pass
+    mode: single
+    toc: false
     id: 124443
     title: Title of the page
     space_key: "~user"
@@ -57,22 +58,83 @@ backend_config:
 `password`
 :   Password of the user. If password is not supplied, it will be prompted during build
 
+`mode`
+:   One of: `single`, `multiple`. In single mode backend uploads the whole Foliant project into specified Confluence page. In multiple mode backend uploads several chapters into separate Confluecnce pages defined with metadata. More info in the **Modes** section. Default: `single`.
+
+`toc`
+:   Set to `true` to add table of contents into the beginning of the document. Default: `false`
+
 `id`
-:   ID of the page into which the content will be uploaded. *Only for already existing pages*
+:   ID of the page into which the content will be uploaded (use only with `single` mode). *Only for already existing pages*
 
 `title`
-:   Title of the page to be created or updated.
+:   Title of the page to be created or updated (use only with `single` mode).
 
 > Remember that titles of the pages in one space are unique in Confluence.
 
 `space_key`
-:   The key of the space where the page will be created/edited.
+:   The key of the space where the page(s) will be created/edited.
 
 `parent_id`
-:   ID of the parent page under which the new one should be created. *Only for not yet existing pages*.
+:   ID of the parent page under which the new one(s) should be created. *Only for not yet existing pages*.
 
 `pandoc_path`
 :   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
+
+## Modes
+
+Backend confluence_upload can work in two modes:
+
+`single` — the whole project is flattened and uploaded into a single Confluence page;
+`multiple` — you may upload several chapters of your project into separate Confluence pages.
+
+### single mode
+
+To use single mode first supply an option `mode: single` in foliant.yml, and then specify all the page properties (id or title & space) in the same foliant.yml config file. The project will be built, flattened into a single page and uploaded under the defined properties.
+
+### multiple mode
+
+With the power of multiple mode you may create or update several Confluence pages with just one `make` command.
+
+To switch on multiple mode, add an option `mode: multiple` to your foliant.yml file. Next, add properties defining the confluence page (like id or title & space) to the meta section of each chapter that you want to upload.
+
+Meta section is a YAML field-value section in the beginning of the document, which is defined like this:
+
+```yaml
+---
+field: value
+field2: value
+---
+
+Your chapter md-content
+```
+
+So if you want to upload a chapter into confluence, add something like this into the beginning of it:
+
+```yaml
+---
+title: My confluence page
+space_key: "~user"
+confluence: true  # this is required
+---
+
+You chapter md-content
+```
+
+> Notice that we've also added a `confluence: true` key, which is required for chapter to be uploaded. If the key is `false` or is not defined, confluence_upload backend will ignore this chapter.
+
+After you've added properties to every page you want to be uploaded, run the same `make confluence` command:
+
+```
+$ foliant make confluence
+Parsing config... Done
+Making confluence... Done
+────────────────────
+Result:
+https://my_confluence_server.org/pages/viewpage.action?pageId=1231
+https://my_confluence_server.org/pages/viewpage.action?pageId=1232
+https://my_confluence_server.org/pages/viewpage.action?pageId=1233
+```
 
 ## Creating pages with confluence_upload
 

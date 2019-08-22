@@ -12,9 +12,16 @@ from confluence.client import Confluence
 
 from foliant.utils import spinner
 from foliant.backends.base import BaseBackend
-from foliant.preprocessors.utils.combined_options import Options, val_type
+from foliant.meta_commands.generate import generate_meta
+from foliant.cli.meta.utils import get_processed
+from foliant.preprocessors.utils.combined_options import (Options, val_type,
+                                                          validate_in)
 from .classes import Page
 from .ref_diff import find_place, cut_out_tag_fragment, fix_refs, add_ref
+
+
+SINGLE_MODE = 'single'
+MULTIPLE_MODE = 'multiple'
 
 
 class BadParamsException(Exception):
@@ -23,8 +30,8 @@ class BadParamsException(Exception):
 
 def unique_name(dest_dir: str or PosixPath, old_name: str) -> str:
     """
-    Checks if file with old_name exists in dest_dir, if it does:
-    adds incremental numbers until it doesn't.
+    Check if file with old_name exists in dest_dir. If it does —
+    add incremental numbers until it doesn't.
     """
     counter = 1
     dest_path = Path(dest_dir)
@@ -44,16 +51,25 @@ def editor_to_storage(con: Confluence, source: str):
     return con._post('contentbody/convert/storage', {}, data).json()['value']
 
 
+def add_toc(source: str) -> str:
+    """Add table of contents to the beginning of the page source"""
+    result = '<ac:structured-macro ac:macro-id="1" '\
+        'ac:name="toc" ac:schema-version="1"/>\n' + source
+    return result
+
+
 class Backend(BaseBackend):
     _flat_src_file_name = '__all__.md'
 
     targets = ('confluence')
 
-    required_preprocessors_after = {
-        'flatten': {
-            'flat_src_file_name': _flat_src_file_name
-        }
-    },
+    required_preprocessors_after = [
+        {'confluence_upload': {}},
+        {'flatten': {'flat_src_file_name': _flat_src_file_name}},
+    ]
+
+    defaults = {'mode': 'single',
+                'toc': False, }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,38 +77,49 @@ class Backend(BaseBackend):
         self._flat_src_file_path = self.working_dir / self._flat_src_file_name
         self._cachedir = self.project_path / '.confluencecache'
         self._attachments_dir = self._cachedir / 'attachments'
+        config = self.config.get('backend_config', {}).get('confluence_upload', {})
+        self.options = {**self.defaults, **config}
 
         self.logger = self.logger.getChild('confluence_upload')
 
         self.logger.debug(f'Backend inited: {self.__dict__}')
 
-    def _setup_config(self):
+    def _get_options(self, config: dict) -> Options:
         '''
-        Read backend options from foliant.yml and save them
-        into self._confluence_config as an Options object.
+        Update backend options from foliant.yml with `config` dictionary,
+        create an Options object with the necessary checks and return it.
         '''
-
-        config = self.config.get('backend_config', {}).get('confluence_upload', {})
-        self._confluence_config = Options(config,
-                                          validators={'host': val_type(str),
-                                                      'login': val_type(str),
-                                                      'password': val_type(str),
-                                                      'id': val_type([str, int]),
-                                                      'parent_id': val_type([str, int]),
-                                                      'title': val_type(str),
-                                                      'space_key': val_type(str),
-                                                      'pandoc_path': val_type(str)},
-                                          required=[('host', 'id',),
-                                                    ('host', 'title', 'space_key')])
+        modes = [SINGLE_MODE, MULTIPLE_MODE]
+        options = {**self.options, **config}
+        options = Options(options,
+                          validators={'host': val_type(str),
+                                      'login': val_type(str),
+                                      'password': val_type(str),
+                                      'id': val_type([str, int]),
+                                      'parent_id': val_type([str, int]),
+                                      'title': val_type(str),
+                                      'space_key': val_type(str),
+                                      'pandoc_path': val_type(str),
+                                      'mode': validate_in(modes), },
+                          required=[('host', 'id',),
+                                    ('host', 'title', 'space_key')])
+        return options
 
     def _prepare_cache_dir(self):
-        """Create a clean cache dir (old one is destroyed)"""
-        shutil.rmtree(self._cachedir, ignore_errors=True)  # cleaning docs
-        self._cachedir.mkdir()
+        """
+        Create the cache dir (if it doesn't exist), cleanup the
+        attachments dir or create it if it doesn't exist.
+        """
+        self.logger.debug(f'Creating and cleaning up cahce dir {self._cachedir}')
+        self._cachedir.mkdir(exist_ok=True)
+
+        # cleaning attachments
+        shutil.rmtree(self._attachments_dir, ignore_errors=True)
         self._attachments_dir.mkdir()
 
     def _connect(self, host: str, login: str, password: str) -> Confluence:
         """Connect to Confluence server and test connection"""
+        self.logger.debug(f'Trying to connect to confluence server at {host}')
         host = host.rstrip('/')
         self.con = Confluence(host, (login, password))
         try:
@@ -104,8 +131,10 @@ class Backend(BaseBackend):
 
     def _md_to_editor(self, con: Confluence, source: str):
         """
-        Convert md source string to confluence editor format (HTML) and return
-        it
+        Convert md source string to HTML with Pandoc, fix pandoc image tags,
+        for confluence doesn't understand <figure> and <figcaption> tags.
+
+        Return the resulting HTML string.
         """
         def _sub_image(match):
             """
@@ -116,11 +145,12 @@ class Backend(BaseBackend):
             image_path = match.group('path')
             result = f'<img src="{image_path}" alt="{image_caption}">'
             self.logger.debug(f'\nold: {match.group(0)}\nnew: {result}')
-        md_source = self._cachedir / '__all__.md'
+            return result
+        md_source = self._cachedir / 'to_convert.md'
         converted = self._cachedir / 'converted.html'
         with open(md_source, 'w') as f:
             f.write(source)
-        pandoc = self._confluence_config.get('pandoc_path', 'pandoc')
+        pandoc = self.options.get('pandoc_path', 'pandoc')
         command = f'{pandoc} {md_source} -f markdown -t html -o {converted}'
 
         self.logger.debug('Converting MD to HTML with Pandoc, command:\n' +
@@ -132,10 +162,10 @@ class Backend(BaseBackend):
 
         self.logger.debug('Fixing pandoc image captions.')
 
-        image_pattern = re.compile(r'<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)')
+        image_pattern = re.compile(r'<figure>\s*<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)\s*</figure>')
         return image_pattern.sub(_sub_image, result)
 
-    def process_images(self, source: str) -> str:
+    def process_images(self, source: str, filename: str or Path) -> str:
         """
         Copy local images to cache dir with unique names, replace their HTML
         definitions with confluence definitions
@@ -148,6 +178,8 @@ class Backend(BaseBackend):
             # leave external images as is
             if image_path.startswith('http'):
                 return image.group(0)
+
+            image_path = Path(filename).parent / image_path
 
             self.logger.debug(f'Found image: {image.group(0)}')
 
@@ -186,6 +218,7 @@ class Backend(BaseBackend):
                 if (ref_s is None) and (ref_e is None):
                     break
                 if (ref_s is not None) and (ref_s.start() < ref_e.start()):
+                    self.logger.debug(f'Found comment: {ref_s.group(0)}')
                     open_refs.append((ref_s.group(1), ref_s.start()))
                     source = source[:ref_s.start()] +\
                         source[ref_s.end():]
@@ -208,8 +241,12 @@ class Backend(BaseBackend):
                 result += add_ref(ref_id=refs[i][0], text=inner)
             result += text[refs[i][2]:]
             return result
+
+        self.logger.debug('Restoring inline comments.')
         if not page.exists:
             return new_content
+
+        self.logger.debug('Collecting comments from the old page.')
         refs, old_content = collect_refs(page.content.body.storage)
         new_refs = []
         for ref in refs:
@@ -219,61 +256,92 @@ class Backend(BaseBackend):
         new_refs = fix_refs(new_refs)
         return restore_refs(new_refs, new_content)
 
-    def _upload_article(self,
-                        source: str,
-                        id_: int or None = None,
-                        space_key: str or None = None,
-                        title: str or None = None,
-                        parent_id: int or None = None):
-        '''Upload one article'''
-        page = Page(self.con, space_key, title, parent_id, id_)
-
-        new_content = self._md_to_editor(self.con, source)
-        new_content = editor_to_storage(self.con, new_content)
-        new_content, attachments = self.process_images(new_content)
-        new_content = self.add_comments(page, new_content)
-        self.logger.debug(f'Content to update:\n\n{new_content}')
-        page.upload_content(new_content, title)
-        page.delete_all_attachments()
-        for img in attachments:
-            page.upload_attachment(img)
-        return page.id
-
-    def _build_and_upload(self):
-        '''
-        Main method. Builds confluence XHTML document from flat md source and
-        uploads it into the confluence server
-        '''
-        config = self._confluence_config
-        self._connect(config['host'],
-                      config['login'],
-                      config['password'])
-        with open(self._flat_src_file_path, encoding='utf8') as f:
-            md_source = f.read()
+    def _upload(self,
+                config: Options or dict,
+                content: str,
+                filename: str or Path):
+        '''Upload one md-file to Confluence. Filename needed to fix the images'''
         id_ = config.get('id')
         space_key = config.get('space_key')
         title = config.get('title')
         parent_id = config.get('parent_id')
-        id_ = self._upload_article(md_source, id_, space_key, title, parent_id)
+        page = Page(self.con, space_key, title, parent_id, id_)
 
-        return '{host}/pages/viewpage.action?pageId={id}'\
-            .format(host=config["host"].rstrip('/'), id=id_)
+        new_content = self._md_to_editor(self.con, content)
+
+        self.logger.debug('Converting HTML to Confluence storage format')
+        new_content = editor_to_storage(self.con, new_content)
+        new_content, attachments = self.process_images(new_content, filename)
+        new_content = self.add_comments(page, new_content)
+
+        if config['toc']:
+            new_content = add_toc(new_content)
+
+        self.logger.debug('Removing old attachments and adding new')
+        page.delete_all_attachments()
+        for img in attachments:
+            page.upload_attachment(img)
+
+        self.logger.debug(f'Content to update:\n\n{new_content}')
+        page.upload_content(new_content, title)
+
+        return '{host}/pages/viewpage.action?pageId={id} ({title})'\
+            .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
+
+    def _build(self):
+        '''
+        Main method. Builds confluence XHTML document from flat md source and
+        uploads it into the confluence server.
+        '''
+        self._connect(self.options['host'],
+                      self.options['login'],
+                      self.options['password'])
+        result = []
+        if self.options['mode'] == SINGLE_MODE:
+            self.logger.debug('Backernd runs in SINGLE mode')
+            with open(self._flat_src_file_path, encoding='utf8') as f:
+                md_source = f.read()
+                # just to run the checks:
+                options = self._get_options({})
+
+                self.logger.debug(f'Options: {options}')
+            result.append(self._upload(options, md_source, self._flat_src_file_path))
+        elif self.options['mode'] == MULTIPLE_MODE:
+            self.logger.debug('Backernd runs in MULTIPLE mode')
+            meta = generate_meta(self.context, self.logger)
+            for chapter in meta:
+                if not chapter.yfm.get('confluence', False):
+                    self.logger.debug(f'Skipping {chapter.name})')
+                    continue
+
+                self.logger.debug(f'Building {chapter.name}')
+                folianttmp = self._cachedir / '__folianttmp__'
+                md_source = get_processed(chapter, folianttmp)
+                options = self._get_options(chapter.yfm)
+
+                self.logger.debug(f'Options: {options}')
+                original_file = self.project_path / self.config['src_dir'] /\
+                    chapter.name
+                result.append(self._upload(options, md_source, original_file))
+        if result:
+            return '\n' + '\n'.join(result)
+        else:
+            return 'nothing to upload'
 
     def make(self, target: str) -> str:
         with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
             try:
-                self._setup_config()
                 self._prepare_cache_dir()
-                if "login" not in self._confluence_config:
-                    msg = f"Please input login for {self._confluence_config['host']}:\n"
+                if "login" not in self.options:
+                    msg = f"Please input login for {self.options['host']}:\n"
                     msg = '\n!!! User input required !!!\n' + msg
-                    self._confluence_config['login'] = input(msg)
-                if "password" not in self._confluence_config:
-                    msg = f"Please input password for {self._confluence_config['login']}:\n"
+                    self.options['login'] = input(msg)
+                if "password" not in self.options:
+                    msg = f"Please input password for {self.options['login']}:\n"
                     msg = '\n!!! User input required !!!\n' + msg
-                    self._confluence_config['password'] = getpass(msg)
+                    self.options['password'] = getpass(msg)
                 if target == 'confluence':
-                    return self._build_and_upload()
+                    return self._build()
                 else:
                     raise ValueError(f'Confluence cannot make {target}')
 

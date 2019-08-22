@@ -10,6 +10,7 @@ class PageNotAssignedError(Exception):
 
 
 class Page:
+    '''Wrapper class for a Confluence page'''
 
     def __init__(self,
                  connection: Confluence,
@@ -80,7 +81,7 @@ class Page:
                 content = self._con.get_content_by_id(self._id, expand=['version', 'body.storage'])
             except ConfluenceResourceNotFound as e:
                 # foliant can't reraise this error because it requires
-                # additional parameters, so we reraise it is runtime error
+                # additional parameters, so we reraise it as runtime error
                 raise RuntimeError(str(e))
             self._update_properties(content)
         else:
