@@ -1,3 +1,10 @@
+# 0.4.0
+
+- Fix: attachments were not uploaded for nonexistent pages
+- Change confluence api wrapper to atlassian-python-api
+- Rename backend to confluence
+- Better error reporting
+
 # 0.3.0
 
 - Fix bug with images.

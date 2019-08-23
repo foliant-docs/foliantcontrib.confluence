@@ -17,7 +17,7 @@ class Preprocessor(BasePreprocessor):
         self.logger.debug(f'Preprocessor inited: {self.__dict__}')
 
     def apply(self):
-        self.logger.info('Applying preprocessor confluence_upload')
+        self.logger.info('Applying preprocessor confluence')
 
         cachedir = self.project_path / '.confluencecache/__folianttmp__'
         rmtree(cachedir, ignore_errors=True)

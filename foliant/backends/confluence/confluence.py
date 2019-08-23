@@ -4,13 +4,11 @@ import os
 
 from subprocess import run, PIPE, STDOUT
 from pathlib import Path, PosixPath
-from requests.exceptions import ConnectionError
 from getpass import getpass
 
-from confluence.exceptions.authenticationerror import ConfluenceAuthenticationError
-from confluence.client import Confluence
+from atlassian import Confluence
 
-from foliant.utils import spinner
+from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
 from foliant.meta_commands.generate import generate_meta
 from foliant.cli.meta.utils import get_processed
@@ -48,7 +46,12 @@ def editor_to_storage(con: Confluence, source: str):
     and return it
     """
     data = {"value": source, "representation": "editor"}
-    return con._post('contentbody/convert/storage', {}, data).json()['value']
+    res = con.post('rest/api/contentbody/convert/storage', data=data)
+    if res and 'value' in res:
+        return res['value']
+    else:
+        raise RuntimeError('Cannot convert editor to storage. Got response:'
+                           f'\n{res}')
 
 
 def add_toc(source: str) -> str:
@@ -64,7 +67,7 @@ class Backend(BaseBackend):
     targets = ('confluence')
 
     required_preprocessors_after = [
-        {'confluence_upload': {}},
+        {'confluence': {}},
         {'flatten': {'flat_src_file_name': _flat_src_file_name}},
     ]
 
@@ -77,10 +80,10 @@ class Backend(BaseBackend):
         self._flat_src_file_path = self.working_dir / self._flat_src_file_name
         self._cachedir = self.project_path / '.confluencecache'
         self._attachments_dir = self._cachedir / 'attachments'
-        config = self.config.get('backend_config', {}).get('confluence_upload', {})
+        config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
 
-        self.logger = self.logger.getChild('confluence_upload')
+        self.logger = self.logger.getChild('confluence')
 
         self.logger.debug(f'Backend inited: {self.__dict__}')
 
@@ -121,13 +124,13 @@ class Backend(BaseBackend):
         """Connect to Confluence server and test connection"""
         self.logger.debug(f'Trying to connect to confluence server at {host}')
         host = host.rstrip('/')
-        self.con = Confluence(host, (login, password))
+        self.con = Confluence(host, login, password)
         try:
-            self.con._get('space', {}, [])
-        except ConnectionError:
-            raise RuntimeError(f'Cannot connect to {host}')
-        except ConfluenceAuthenticationError:
-            raise RuntimeError(f'Wrong login or password for Confluence server')
+            res = self.con.get('rest/api/space')
+        except UnicodeEncodeError:
+            raise RuntimeError('Sorry, non-ACSII passwords are not supported')
+        if isinstance(res, str) or 'statusCode' in res:
+            raise RuntimeError(f'Cannot connect to {host}:\n{res}')
 
     def _md_to_editor(self, con: Confluence, source: str):
         """
@@ -247,7 +250,7 @@ class Backend(BaseBackend):
             return new_content
 
         self.logger.debug('Collecting comments from the old page.')
-        refs, old_content = collect_refs(page.content.body.storage)
+        refs, old_content = collect_refs(page.body)
         new_refs = []
         for ref in refs:
             span = find_place(old_content, new_content, ref[1], ref[2])
@@ -277,10 +280,17 @@ class Backend(BaseBackend):
         if config['toc']:
             new_content = add_toc(new_content)
 
-        self.logger.debug('Removing old attachments and adding new')
-        page.delete_all_attachments()
-        for img in attachments:
-            page.upload_attachment(img)
+        if attachments:
+            # we can only upload attachments to existing page
+            if not page.exists:
+                self.logger.debug('Page does not exist. Creating an empty one '
+                                  'to upload attachments')
+                page.create_empty_page(title)
+            else:
+                self.logger.debug('Removing old attachments and adding new')
+                page.delete_all_attachments()
+            for img in attachments:
+                page.upload_attachment(img)
 
         self.logger.debug(f'Content to update:\n\n{new_content}')
         page.upload_content(new_content, title)
@@ -310,11 +320,13 @@ class Backend(BaseBackend):
             self.logger.debug('Backernd runs in MULTIPLE mode')
             meta = generate_meta(self.context, self.logger)
             for chapter in meta:
+
                 if not chapter.yfm.get('confluence', False):
                     self.logger.debug(f'Skipping {chapter.name})')
                     continue
 
                 self.logger.debug(f'Building {chapter.name}')
+                output(f'Building {chapter.name}', self.quiet)
                 folianttmp = self._cachedir / '__folianttmp__'
                 md_source = get_processed(chapter, folianttmp)
                 options = self._get_options(chapter.yfm)
@@ -329,8 +341,9 @@ class Backend(BaseBackend):
             return 'nothing to upload'
 
     def make(self, target: str) -> str:
-        with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
+        with spinner(f'Making {target}\n', self.logger, self.quiet, self.debug):
             try:
+                Options(self.options, required=['host'])
                 self._prepare_cache_dir()
                 if "login" not in self.options:
                     msg = f"Please input login for {self.options['host']}:\n"

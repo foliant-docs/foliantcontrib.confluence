@@ -12,20 +12,20 @@ except FileNotFoundError:
 
 
 setup(
-    name='foliantcontrib.confluence_upload',
+    name='foliantcontrib.confluence',
     description=SHORT_DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    version='0.3.0',
+    version='0.4.0',
     author='Daniil Minukhin',
     author_email='ddddsa@gmail.com',
-    url='https://github.com/foliant-docs/foliantcontrib.confluence_upload',
-    packages=['foliant.preprocessors', 'foliant.backends.confluence_upload'],
+    url='https://github.com/foliant-docs/foliantcontrib.confluence',
+    packages=['foliant.preprocessors', 'foliant.backends.confluence'],
     license='MIT',
     platforms='any',
     install_requires=[
         'foliant>=1.0.8',
-        'confluence-rest-library',
+        'atlassian-python-api',
         'foliantcontrib.utils.combined_options>=1.0.6',
         'foliantcontrib.meta>=1.1.0',
     ],
