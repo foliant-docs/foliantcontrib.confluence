@@ -1,3 +1,7 @@
+# 0.4.1
+
+- Fix: conflict with escape_code
+
 # 0.4.0
 
 - Fix: attachments were not uploaded for nonexistent pages

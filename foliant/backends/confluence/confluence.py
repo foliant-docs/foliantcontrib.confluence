@@ -66,10 +66,7 @@ class Backend(BaseBackend):
 
     targets = ('confluence')
 
-    required_preprocessors_after = [
-        {'confluence': {}},
-        {'flatten': {'flat_src_file_name': _flat_src_file_name}},
-    ]
+    required_preprocessors_after = []
 
     defaults = {'mode': 'single',
                 'toc': False, }
@@ -82,6 +79,11 @@ class Backend(BaseBackend):
         self._attachments_dir = self._cachedir / 'attachments'
         config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
+
+        # in single mode we use flat file, in multiple mode — working_dir
+        if self.options['mode'] == 'single':
+            self.required_preprocessors_after.\
+                append({'flatten': {'flat_src_file_name': self._flat_src_file_name}})
 
         self.logger = self.logger.getChild('confluence')
 
@@ -327,8 +329,8 @@ class Backend(BaseBackend):
 
                 self.logger.debug(f'Building {chapter.name}')
                 output(f'Building {chapter.name}', self.quiet)
-                folianttmp = self._cachedir / '__folianttmp__'
-                md_source = get_processed(chapter, folianttmp)
+                # folianttmp = self._cachedir / '__folianttmp__'
+                md_source = get_processed(chapter, self.working_dir)
                 options = self._get_options(chapter.yfm)
 
                 self.logger.debug(f'Options: {options}')
