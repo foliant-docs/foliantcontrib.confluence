@@ -1,3 +1,8 @@
+# 0.4.2
+
+- Detect if page hadn't changed and don't upload it. Changed pages are marked by "*" in the output.
+- s
+
 # 0.4.1
 
 - Fix: conflict with escape_code

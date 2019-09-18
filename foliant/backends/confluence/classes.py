@@ -146,9 +146,21 @@ class Page:
         else:
             self.upload_content('', title)
 
+    def need_update(self, new_content: str, new_title: str or None = None):
+        '''Check it page content and title differs from new_content'''
+        if not self.exists:
+            return True
+        result = not\
+            self._con.is_page_content_is_already_updated(self.id, new_content)
+        if not result:
+            title = new_title or self.title
+            result = self.content['title'] != title
+        return result
+
     def upload_content(self, new_content: str, title: str = None):
         if self.exists:
             content = self._con.update_page(page_id=self._id,
+                                            # adding space to force-update page
                                             body=new_content + ' ',
                                             title=title or self.title)
         else:

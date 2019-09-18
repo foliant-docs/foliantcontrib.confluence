@@ -16,11 +16,11 @@ setup(
     description=SHORT_DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    version='0.4.1',
+    version='0.5.2',
     author='Daniil Minukhin',
     author_email='ddddsa@gmail.com',
     url='https://github.com/foliant-docs/foliantcontrib.confluence',
-    packages=['foliant.preprocessors', 'foliant.backends.confluence'],
+    packages=['foliant.backends.confluence'],
     license='MIT',
     platforms='any',
     install_requires=[
@@ -28,6 +28,7 @@ setup(
         'atlassian-python-api',
         'foliantcontrib.utils.combined_options>=1.0.6',
         'foliantcontrib.meta>=1.1.0',
+        'beautifulsoup4',
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",

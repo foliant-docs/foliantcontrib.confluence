@@ -7,6 +7,7 @@ from pathlib import Path, PosixPath
 from getpass import getpass
 
 from atlassian import Confluence
+from bs4 import BeautifulSoup
 
 from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
@@ -15,7 +16,7 @@ from foliant.cli.meta.utils import get_processed
 from foliant.preprocessors.utils.combined_options import (Options, val_type,
                                                           validate_in)
 from .classes import Page
-from .ref_diff import find_place, cut_out_tag_fragment, fix_refs, add_ref
+from .ref_diff import restore_refs, find_place, cut_out_tag_fragment, fix_refs, add_ref
 
 
 SINGLE_MODE = 'single'
@@ -233,33 +234,43 @@ class Backend(BaseBackend):
                         source[ref_e.end():]
             return refs, source
 
-        def restore_refs(refs: list, text: str) -> str:
-            if not refs:
-                return text
-            result = ''
-            for i in range(len(refs)):
-                if i == 0:
-                    result = text[:refs[i][1]]
-                else:
-                    result += text[refs[i - 1][2]:refs[i][1]]
-                inner = text[refs[i][1]:refs[i][2]]
-                result += add_ref(ref_id=refs[i][0], text=inner)
-            result += text[refs[i][2]:]
-            return result
+        # def restore_refs(refs: list, text: str) -> str:
+        #     if not refs:
+        #         return text
+        #     result = ''
+        #     for i in range(len(refs)):
+        #         if i == 0:
+        #             result = text[:refs[i][1]]
+        #         else:
+        #             result += text[refs[i - 1][2]:refs[i][1]]
+        #         inner = text[refs[i][1]:refs[i][2]]
+        #         result += add_ref(ref_id=refs[i][0], text=inner)
+        #     result += text[refs[i][2]:]
+        #     return result
 
         self.logger.debug('Restoring inline comments.')
         if not page.exists:
             return new_content
 
         self.logger.debug('Collecting comments from the old page.')
-        refs, old_content = collect_refs(page.body)
-        new_refs = []
-        for ref in refs:
-            span = find_place(old_content, new_content, ref[1], ref[2])
-            span = cut_out_tag_fragment(new_content, *span)
-            new_refs.append((ref[0], *span))
-        new_refs = fix_refs(new_refs)
-        return restore_refs(new_refs, new_content)
+        self.logger.debug('OLD:\n\n'+page.body)
+        self.logger.debug('NEW:\n\n'+new_content)
+        return restore_refs(page.body, new_content)
+        # refs, old_content = collect_refs(page.body)
+        # new_refs = []
+        # self.logger.debug(f'Old content:\n\n{old_content}')
+        # self.logger.debug(f'New content:\n\n{new_content}')
+        # for ref in refs:
+        #     self.logger.debug(f'processing refs: {ref}')
+        #     span = find_place(old_content, new_content, ref[1], ref[2])
+        #     self.logger.debug(f'find_place results: {span}')
+        #     span = cut_out_tag_fragment(new_content, *span)
+        #     self.logger.debug(f'cut_out_tag_fragment results: {span}')
+        #     bs = BeautifulSoup(new_content[span[0]:span[1]], 'html.parser')
+        #     if bs.text.strip():
+        #         new_refs.append((ref[0], *span))
+        # new_refs = fix_refs(new_refs)
+        # return restore_refs(new_refs, new_content)
 
     def _upload(self,
                 config: Options or dict,
@@ -294,10 +305,15 @@ class Backend(BaseBackend):
             for img in attachments:
                 page.upload_attachment(img)
 
-        self.logger.debug(f'Content to update:\n\n{new_content}')
-        page.upload_content(new_content, title)
+        need_update = page.need_update(new_content, title)
+        if need_update:
+            self.logger.debug(f'Content to update:\n\n{new_content}')
+            page.upload_content(new_content, title)
+        else:
+            self.logger.debug(f'Page with id {page.id} and title "{page.title}"'
+                              " hadn't changed. Skipping.")
 
-        return '{host}/pages/viewpage.action?pageId={id} ({title})'\
+        return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
             .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
 
     def _build(self):
