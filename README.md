@@ -47,6 +47,8 @@ backend_config:
     space_key: "~user"
     parent_id: 124442
     pandoc_path: pandoc
+    restore_comments: true
+    resolve_if_changed: false
 ```
 
 `host`
@@ -80,6 +82,12 @@ backend_config:
 
 `pandoc_path`
 :   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
+
+`restore_comments`
+:   Attempt to restore inline comments near the same places after updating the page. Default: `true`
+
+`resolve_if_changed`
+:   Delete inline comment from the source if the commented text was changed. This will automatically mark comment as resolved. Default: `false`
 
 ## Modes
 

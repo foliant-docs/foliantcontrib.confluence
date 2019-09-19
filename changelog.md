@@ -1,7 +1,7 @@
-# 0.4.2
+# 0.5.2
 
-- Detect if page hadn't changed and don't upload it. Changed pages are marked by "*" in the output.
-- s
+- Completely rewrite restoring inline comments feature.
+- Add `restore_comments` and `resolve_if_changed` emergency options.
 
 # 0.4.1
 

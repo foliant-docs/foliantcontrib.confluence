@@ -148,6 +148,7 @@ class Page:
 
     def need_update(self, new_content: str, new_title: str or None = None):
         '''Check it page content and title differs from new_content'''
+        # Method doesn't work right now. Maybe remove in future
         if not self.exists:
             return True
         result = not\

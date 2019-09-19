@@ -3,29 +3,56 @@ import re
 from copy import copy
 from difflib import SequenceMatcher
 from collections import namedtuple
+from pprint import pformat
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
+logger = None
 
-def restore_refs(old_content: str, new_content: str, resolve_changed: bool = False):
+
+def restore_refs(old_content: str,
+                 new_content: str,
+                 logger_,
+                 resolve_changed: bool = False):
+    '''
+    Restore inline-comments from the old_content in the new_content and return
+    the resulting html string.
+    If `resolve_changed` is False — only restore the comments in the text that
+    wasn't changed.
+    '''
+    # setting up global logger
+    global logger
+    logger = logger_
+
     old_bs = BeautifulSoup(old_content, 'html.parser')
     new_bs = BeautifulSoup(new_content, 'html.parser')
-    ref_dict = get_original_ref_dict(old_bs)
+    ref_dict = generate_ref_dict(old_bs)
     new_strings = [s for s in new_bs.strings if s.strip()]
     old_strings = [s for s in old_bs.strings if s.strip()]
     places = find_place2(old_strings, new_strings, ref_dict)
-    c_places = correct_places(places)
-    for place in c_places['equal']:
-        restore_equal_ref(place, new_strings)
+    equal, not_equal = correct_places(places)
+    restore_equal_refs(equal, new_strings)
     if not resolve_changed:
-        for pos, refs in c_places['shared'].items():
-            insert_shared_refs(pos, refs, new_strings)
+        insert_unequal_refs(not_equal, new_strings)
     return str(new_bs)
 
 
 def unwrap(element):
+    '''
+    Unwrap an element from a tag in place. The tag must only contain one string inside.
+    The string will be connected to text before and after tag.
+    Function returns two elements:
+
+    full_string, (before, element, after)
+
+    - full_string — a full NavigableString, which replaced the tag and the text before/after;
+    - A tuple of three elements:
+      - before — original NavigableString, that was before the tag or None if there wasn't any.
+      - element — original tag itself.
+      - after — original NavigableString, that was after the tag or None if there wasn't any.
+    '''
     parent = element.parent
-    orig = dict(before=None, comment=element, after=None)
+    before = after = None
     children = list(element.children)
     if len(children) > 1:
         raise RuntimeError('Tag should wrap just one string')
@@ -36,45 +63,105 @@ def unwrap(element):
     ind = siblings.index(element)
     if ind > 0 and isinstance(siblings[ind - 1], NavigableString):
         content = siblings[ind - 1] + content
-        orig['before'] = siblings[ind - 1]
+        before = siblings[ind - 1]
         siblings.pop(ind - 1)
         ind -= 1
     if ind < len(siblings) - 1 and isinstance(siblings[ind + 1], NavigableString):
         content = content + siblings[ind + 1]
-        orig['after'] = siblings[ind + 1]
+        after = siblings[ind + 1]
         siblings.pop(ind + 1)
     ns = NavigableString(content)
     element.replace_with(ns)
-    return ns, orig
+    return ns, (before, element, after)
 
 
-def get_original_ref_dict(bs: BeautifulSoup) -> dict:
+def generate_ref_dict(bs: BeautifulSoup) -> dict:
+    '''
+    Receives a BeautifulSoup object and generates a dictionary with info about
+    inline comments.
+
+    Output dictionary structure:
+
+    Key: id of a string, which contains the inline comment. It's one of the strings
+         that may be obtained by BeautifulSoup.strings method.
+    Value: {info_dict}, dictionary with info on the inline comment.
+
+    {info_dict} structure:
+
+    {
+    'full':    Full unwrapped NavigableString which contained inline comment. It
+               is in fact right now a part of the bs tree.
+    'before':  NavigableString that was before the inline comment until next tag
+               or end of parent OR another {info_dict} if there were several
+               comments in one paragraph.
+    'comment': The inline comment tag which was unwrapped, with commented text
+               included.
+    'after':   NavigableString that was after the inline comment until next tag
+               or end of parent.
+    'ref_id':  For convenience, the id of a comment from the 'ac:ref' attribute.
+    }
+    '''
+    logger.debug('generate_ref_dict START')
+    logger.debug('Collecting comments from the old article (remote)')
     result = {}
     refs = bs.find_all(re.compile('ac:inline-comment-marker'))
     for ref in refs:
         ref_id = ref.attrs['ac:ref']
-        full, compound_dict = unwrap(ref)
-        cs = dict(full=full, ref_id=ref_id, **compound_dict)
+        full, (before, comment, after) = unwrap(ref)
+        cs = dict(full=full,
+                  ref_id=ref_id,
+                  before=before,
+                  comment=comment,
+                  after=after)
+
+        # if 'before string' was already added to result — absorb the comment
+        # dictionary instead
         if cs['before'] and id(cs['before']) in result:
             cs['before'] = result.pop(id(cs['before']))
-        if cs['after'] and id(cs['after']) in result:
-            cs['after'] = result.pop(id(cs['after']))
         result[id(cs['full'])] = cs
+    logger.debug(f'Collected comments:\n\n{pformat(result)}')
+    logger.debug('generate_ref_dict END')
     return result
 
 
-def find_place2(old_strings, new_strings: list, strings: dict) -> dict:
+def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
+    '''
+    Compare `old_strings` and `new_strings`.
+    For each element of ref_dict: Find strings in `new_strings` which correspond
+    to the commented string, described by `ref_dict` element. This string is one
+    of the `old_strings`.
+
+    Return a list of tuples, each containing three elements:
+
+    [(info_dict, indeces, equal)]
+
+    - info_dict — an {info_dict} of the inline comment.
+    - indeces — a list of indeces of the `new_strings` which correspond to the
+      inline comment in the old text.
+    - equal — a boolean value which tells whether the commented paragraph was changed
+      or not. True — unchanged, False — changed.
+    '''
+    logger.debug('find_place2 START')
     result = []
+
+    # strip all strings from indentations and formatting for comparison
     s_old_strings = [s.strip() for s in old_strings]
     s_new_strings = [s.strip() for s in new_strings]
+    #
     sm = SequenceMatcher(None, s_old_strings, s_new_strings)
     sm.ratio()
     Opcode = namedtuple('opcode', ('tag', 'a_s', 'a_e', 'b_s', 'b_e'))
     opcodes = [Opcode(*opc) for opc in sm.get_opcodes()]
+    logger.debug(f'Opcodes after matching: {sm.get_opcodes()}')
+
+    # We use IDs to determine the correct string because the tree may contain
+    # strings with equal values, but located in different parts of the tree. ID
+    # allows to determine the correct string precisely.
     old_string_ids = [id(s) for s in old_strings]
-    for cs_id in strings:
+    for cs_id in ref_dict:
         equal = False
         ind = old_string_ids.index(cs_id)
+
         for i in range(len(opcodes)):
             if opcodes[i].a_s <= ind < opcodes[i].a_e:
                 break
@@ -82,285 +169,191 @@ def find_place2(old_strings, new_strings: list, strings: dict) -> dict:
             i = None
         if i is None:
             continue
+
         if opcodes[i].tag == 'equal':
-            found = [opcodes[i].b_s + (ind - opcodes[i].a_s)]
+            indeces = [opcodes[i].b_s + (ind - opcodes[i].a_s)]
             equal = True
         elif opcodes[i].tag == 'replace':
-            found = list(range(opcodes[i].b_s, opcodes[i].b_e))
+            indeces = list(range(opcodes[i].b_s, opcodes[i].b_e))
         elif opcodes[i].tag == 'delete':
-            found = []
+            indeces = []
             if i and opcodes[i - 1].tag == 'insert':
-                found.extend(range(opcodes[i - 1].b_s, opcodes[i - 1].b_e))
+                indeces.extend(range(opcodes[i - 1].b_s, opcodes[i - 1].b_e))
             if i + 2 <= len(opcodes) and opcodes[i + 1].tag == 'insert':
-                found.extend(range(opcodes[i + 1].b_s, opcodes[i + 1].b_e))
-            if not found:
-                found.append(opcodes[i].b_s - 1 if opcodes[i].b_s else 0)
-                found.append(opcodes[i].b_e if opcodes[i].b_e + 1 <= len(new_strings) else opcodes[i].b_e - 1)
-        result.append((strings[cs_id], found, equal))
+                indeces.extend(range(opcodes[i + 1].b_s, opcodes[i + 1].b_e))
+            if not indeces:
+                indeces.append(opcodes[i].b_s - 1 if opcodes[i].b_s else 0)
+                indeces.append(opcodes[i].b_e if opcodes[i].b_e + 1 <= len(new_strings) else opcodes[i].b_e - 1)
+        result.append((ref_dict[cs_id], indeces, equal))
+    logger.debug(f'List of found places:\n\n{pformat(result)}')
+    logger.debug('find_place2 END')
     return result
 
 
-def correct_places(places: list) -> list:
-    equal_places = [(p[0], copy(p[1]), p[2]) for p in places if p[2]]
-    #
+def add_unique(a: list, b: list, at_beginning: bool = True) -> None:
+    '''
+    Add only unique elements from b to a in place.
+    If `at_beginning` is True — elements are inserted at the beginning
+    of the a list. If False — they are appended at the end.'''
+    for i in b:
+        if i not in a:
+            if at_beginning:
+                a.insert(0, i)
+            else:
+                a.append(i)
+
+
+def correct_places(places: list) -> dict:
+    '''
+    Takes a list of tuples, got from find_place2 function:
+    [(info_dict, indeces, equal)]
+
+    Looks for the places with equal == True and gathers it into a separate list.
+    Removes all indeces which were mentioned in `equal` places from other places.
+    Gathers references in the correct order from the remaining places and saves them
+    in a dictionary with key = string index, value = list of ref_ids, which point
+    to this string.
+
+    Returns a tuple with two items:
+
+    (equal, not_equal)
+
+    - equal = [(info_dict, indeces, equal)] : list of equal places;
+    - not_equal = {index: [ref_list]} : dictionary with references for strings
+                which are not equal.
+    '''
+    logger.debug('correct_places START')
+
+    equal_places = [(info_dict, copy(indeces), equal)
+                    for info_dict, indeces, equal in places if equal]
+
     # remove all places where equal strings are mentioned
-    for ep in equal_places:
-        for place in places:
-            if ep[1][0] in place[1]:
-                place[1].pop(place[1].index(ep[1][0]))
-    #
+    for _, equal_indeces, _ in equal_places:
+        for _, indeces, _ in places:
+            equal_index = equal_indeces[0]
+            if equal_index in indeces:
+                indeces.pop(indeces.index(equal_index))
+
     # remove all places where strings are empty after prev. stage
     places = [p for p in places if p[1]]
-    #
-    # make a list with refs which share the same string
-    def get_refs(ref_dict: dict) -> list:
-        refs = {ref_dict['ref_id']}
-        if isinstance(ref_dict['before'], dict):
-            refs.update(get_refs(ref_dict['before']))
-        if isinstance(ref_dict['after'], dict):
-            refs.update(get_refs(ref_dict['after']))
+
+    def get_refs(info_dict: dict) -> list:
+        '''Get all ref_ids from a nested place in the correct order'''
+        refs = [info_dict['ref_id']]
+        if isinstance(info_dict['before'], dict):
+            add_unique(refs, get_refs(info_dict['before']))
         return refs
-    shared_places = {}
-    for place in places:
-        refs = get_refs(place[0])
-        for pos in place[1]:
-            shared_places.setdefault(pos, set()).update(refs)
-    # for place in places:
-    #     for pos in place[1]:
-    #         refs = {place[0]['ref_id']}
-    #         for place2 in places:
-    #             if place2 is place:
-    #                 continue
-    #             if pos in place2[1]:
-    #                 refs.update(get_refs(place2))
-    #                 place2[1].pop(place2[1].index(pos))
-    #         if len(refs) > 1:
-    #             shared_places[pos] = refs
-    #
-    # remove all places where strings are empty after prev. stage
-    # single_places = [p for p in places if p[1]]
-    return {'equal': equal_places,
-            'shared': shared_places}
-            # 'single': single_places}
+
+    # make a dictionary with refs list for each string index
+    unequal = {}
+    for info_dict, indeces, _ in places:
+        refs = get_refs(info_dict)
+        for pos in indeces:
+            add_unique(unequal.setdefault(pos, []), refs, False)
+
+    logger.debug(f'Equal places:\n\n{pformat(equal_places)}\n\n'
+                 f'References for changed strings:\n\n{pformat(unequal)}')
+    logger.debug('correct_places END')
+    return equal_places, unequal
 
 
-def restore_equal_ref(place: tuple, new_strings: list):
+def restore_equal_refs(places: list, new_strings: list) -> None:
     """
-    for place in cp['equal']:
-        restore_equal_ref(place, bns)
+    Receive a list of `place` tuples and a list of strings of the new tree `new_strings`:
+
+    places = [(info_dict, indeces, equal)]
+    new_strings = [NavigableString]
+
+    Restore the inline comments in corresponding strings of new_strings (determined
+    by place[1]) in the same way it was present in the old string. The way is
+    determined by the `place` tuple.
+
+    Function returns nothing, the comments are restored in place.
     """
     def get_content_list(ref_dict: dict) -> list:
+        '''
+        Get consequetive list of html elements and strings in the correct order
+        to be inserted instead of the target string.
+        '''
         content = []
         if isinstance(ref_dict['before'], dict):
             content.extend(get_content_list(ref_dict['before']))
         elif ref_dict['before'] is not None:
             content.append(ref_dict['before'])
         content.append(ref_dict['comment'])
-        if isinstance(ref_dict['after'], dict):
-            content.extend(get_content_list(ref_dict['after']))
-        elif ref_dict['after'] is not None:
+        # if isinstance(ref_dict['after'], dict):
+        #     content.extend(get_content_list(ref_dict['after']))
+        if ref_dict['after'] is not None:
             content.append(ref_dict['after'])
         return content
-    content_list = get_content_list(place[0])
-    target = new_strings[place[1][0]]
-    new_elem = copy(content_list[0])
-    target.replace_with(new_elem)
-    target = new_elem
-    for i in range(1, len(content_list)):
-        new_elem = copy(content_list[i])
-        target.insert_after(new_elem)
+
+    logger.debug('restore_equal_refs START')
+
+    for info_dict, indeces, _ in places:
+        logger.debug(f'Source info_dict:\n\n{pformat(info_dict)}')
+
+        content_list = get_content_list(info_dict)
+
+        logger.debug(f'Content list to insert:\n\n{pformat(content_list)}')
+
+        target = new_strings[indeces[0]]
+
+        logger.debug(f'String to be replaced: {target}')
+
+        # we use copy to detach element from previous tree
+        new_elem = copy(content_list[0])
+        target.replace_with(new_elem)
         target = new_elem
+        for i in range(1, len(content_list)):
+            new_elem = copy(content_list[i])
+            target.insert_after(new_elem)
+            target = new_elem
+
+    logger.debug('restore_equal_refs END')
 
 
-def insert_shared_refs(pos: int, refs: set, new_strings: list):
-    contents = []
-    refs_list = list(refs)
-    ns = new_strings[pos]
-    # if number of refs more than chars in string — ignore the rest
-    num_refs = len(refs_list) if len(refs_list) <= len(ns) else len(ns)
-    num_chars = len(ns) // num_refs
-    for i in range(num_refs):
-        tag = Tag(name='ac:inline-comment-marker',
-                  attrs={'ac:ref': refs_list[i]})
-        start = i * num_chars
-        tag.string = ns[start:start + num_chars]
-        contents.append(tag)
-    #
-    ns.replace_with(contents[0])
-    target = contents[0]
-    for i in range(1, len(contents)):
-        target.insert_after(contents[i])
-        target = contents[i]
-
-# def insert_single_ref(pos: int, place, new_)
-
-
-
-def is_inside_tag(source: str, position: int):
+def insert_unequal_refs(unequal: dict, new_strings: list):
     '''
-    Determine if position of the source is inside an html-tag.
-    If it is — returns a tuple with tag boundries,
-    if it's not — returns None
+    Receive an `unequal` dictionary with ref_ids and a list of strings of the
+    new tree `new_strings`:
+
+    unequal = {index: [list_of_ref_ids]}
+    new_strings = [NavigableString]
+
+    Wrap each NavigableString determined by index from `unequal` dictionary in
+    the corresponding inline-comment tag from the dict value. If the value
+    contains several ref_ids — divide the string into equal chunks of text for
+    each ref_id.
+
+    Function returns nothing, the comments are restored in place.
     '''
+    logger.debug('insert_unequal_refs START')
+    for pos, refs in unequal.items():
+        logger.debug(f'Inserting refs into string #{pos}: {refs}')
 
-    gt = source.find('>', position)
-    lt = source.find('<', position)
-    if gt == -1 or lt < gt:
-        return  # not inside tag
-    elif lt == -1 or lt > gt:
-        end = gt + 1
-        cur = position
-        while True:
-            cur -= 1
-            if source[cur] == '<':
-                return cur, end
-            elif source[cur] == '>' or cur == 0:
-                return  # something wrong, that's not a tag
+        contents = []
+        ns = new_strings[pos]
 
+        logger.debug(f'String to be replaced: {ns}')
 
-def cut_out_tag_fragment(source: str, start: int, end: int):
-    '''
-    Determine if part of the source, limited by start and end indeces,
-    contains a fragment of a tag. If it does — cut out the tag part and return
-    the new indeces.
-    '''
-    new_start = start
-    new_end = end
-    span = is_inside_tag(source, start)
-    if span:
-        new_start = span[1]
-        if new_start >= end:
-            for i in range(10):
-                new_end = new_start + i
-                if source[new_end] == '<':  # another tag starts
-                    break
-    span = is_inside_tag(source, end)
-    if span:
-        new_end = span[0]
-        if new_start >= new_end:
-            for i in range(10):
-                new_start = new_end - i
-                if source[new_start] == '>':
-                    new_start += 1
-                    break
-    return new_start, new_end
+        # if number of refs more than chars in string — ignore the rest
+        num_refs = min(len(refs), len(ns))
+        chunk_size = len(ns) // num_refs
 
+        logger.debug(f'Dividing string equally into {num_refs} chunks by {chunk_size} chars.')
 
-def fix_refs(refs: [(str, int, int)]) -> [(str, int, int)]:
-    # removing dublicates
-    new_refs = list(dict.fromkeys(refs))
-    # new_refs.sort(key=lambda x: (x[0], x[1]))
-    return new_refs
+        for i in range(num_refs):
+            tag = Tag(name='ac:inline-comment-marker',
+                      attrs={'ac:ref': refs[i]})
+            start = i * chunk_size
+            end = start + chunk_size if i != num_refs - 1 else None
+            tag.string = ns[start:end]
+            contents.append(tag)
 
+        ns.replace_with(contents[0])
+        target = contents[0]
+        for i in range(1, len(contents)):
+            target.insert_after(contents[i])
+            target = contents[i]
 
-def find_place(old: str, new: str, start: int, end: int) -> (int, int):
-    '''
-    Given the position of the fragment of the old text defined by start and
-    end indeces, try to determine its position in the new, potentially changed
-    text.
-
-    Return a tuple (new_start, new_end)
-    '''
-    sm = SequenceMatcher(None, old, new)
-    sm.ratio()
-    Opcode = namedtuple('opcode', ('tag', 'a_s', 'a_e', 'b_s', 'b_e'))
-    opcodes = [Opcode(*opc) for opc in sm.get_opcodes()]
-    # print(opcodes)
-    first = last = None
-    for i in range(len(opcodes)):
-        if opcodes[i].a_s <= start and opcodes[i].a_e > start:
-            first = i  # opcode index which features the start point
-            break
-    for i in range(len(opcodes)):
-        if opcodes[i].a_s < end and opcodes[i].a_e >= end:
-            last = i  # opcode index which features the end point
-            break
-    print('first', first, opcodes[first])
-    print('last', last, opcodes[last])
-    if first == last:
-        if opcodes[last].tag == 'delete':
-            if len(opcodes) - 1 >= last + 1 and opcodes[last + 1].tag == 'insert':
-                new_start = opcodes[first].b_s
-                new_end = opcodes[first + 1].b_e
-                print(1)
-                return new_start, new_end
-            else:
-                new_start = opcodes[first].b_s - 10
-                # if opcodes[first].b_s < len(new) - 1:
-                    # the fragment was in the middle of the document
-                new_end = opcodes[first].b_s + 10
-                # else:
-                #     # the fragment was in the end. Select some chars before
-                #     new_end = new_start
-                #     new_start -= 10
-                return new_start, new_end
-        elif opcodes[last].tag == 'replace':
-            print(3)
-            return opcodes[last].b_s, opcodes[last].b_e
-        else:  # opcodes[last].tag == 'equal'
-            new_start = opcodes[first].b_s + (start - opcodes[first].a_s)
-            new_end = new_start + (end - start)
-            print(4)
-            return new_start, new_end
-    else:  # first != last
-        if opcodes[first].tag in ('delete', 'replace'):
-            print(5)
-            new_start = opcodes[first].b_s
-        else:  # equal
-            print(6)
-            new_start = (start - opcodes[first].a_s) + opcodes[first].b_s
-        if opcodes[last].tag == 'delete':
-            if opcodes[last + 1].tag == 'insert':
-                print(7)
-                new_end = opcodes[last + 1].b_e
-            else:
-                print(8)
-                new_end = opcodes[last].b_e
-        elif opcodes[last].tag == 'replace':
-            print(9)
-            new_end = opcodes[last].b_e
-        else:  # equal
-            print(10)
-            new_end = opcodes[last].b_e - (opcodes[last].a_e - end)
-        return new_start, new_end
-
-
-def add_ref(ref_id: str, text: str) -> str:
-    # print(f'working on ref {ref_id}')
-    ref_open = '<ac:inline-comment-marker ac:ref="{}">'.format(ref_id)
-    ref_close = '</ac:inline-comment-marker>'
-    # print('text:', text)
-    # p_tag = r'<(?P<close>/?)(?P<tag>[\w:-]+?)\s*[^/>]+>'
-    p_tag = r'<(?P<close>/?)(?P<tag>[^\s/>]+)[^/]*?>'
-    opened = []
-    unopened = []
-    for m in re.finditer(p_tag, text):
-        if m.group('close'):
-            if opened:
-                opened.pop()
-            else:
-                unopened.append(m)
-        else:
-            opened.append(m)
-    result = ref_open
-    if unopened:
-        for i in range(len(unopened)):
-            if i == 0:
-                result += text[:unopened[0].start()]
-            else:
-                result += text[unopened[i - 1].end():unopened[i].start()]
-            result += ref_close + unopened[i].group(0) + ref_open
-        result += text[unopened[i].end():]
-    else:
-        result += text
-    if opened:
-        # print('opened:', opened)
-        for m in reversed(opened):
-            # print(m.group('tag'))
-            result += '</{}>'.format(m.group('tag'))
-        result += ref_close
-        for m in opened:
-            result += m.group(0)
-    else:
-        result += ref_close
-    return result
+    logger.debug('insert_unequal_refs END')
