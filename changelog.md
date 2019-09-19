@@ -2,6 +2,7 @@
 
 - Completely rewrite restoring inline comments feature.
 - Add `restore_comments` and `resolve_if_changed` emergency options.
+- Allow insert raw confluence code (macros, etc) inside `<raw_confluence>` tag.
 
 # 0.4.1
 

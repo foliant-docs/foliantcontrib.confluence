@@ -20,6 +20,8 @@ from .ref_diff import restore_refs
 
 SINGLE_MODE = 'single'
 MULTIPLE_MODE = 'multiple'
+CACHEDIR_NAME = '.confluencecache'
+ESCAPE_DIR_NAME = 'escaped'
 
 
 class BadParamsException(Exception):
@@ -66,7 +68,8 @@ class Backend(BaseBackend):
 
     targets = ('confluence')
 
-    required_preprocessors_after = []
+    required_preprocessors_after = [{'confluence': {'cachedir': CACHEDIR_NAME,
+                                                    'escapedir': ESCAPE_DIR_NAME}}]
 
     defaults = {'mode': 'single',
                 'toc': False, }
@@ -75,7 +78,7 @@ class Backend(BaseBackend):
         super().__init__(*args, **kwargs)
 
         self._flat_src_file_path = self.working_dir / self._flat_src_file_name
-        self._cachedir = self.project_path / '.confluencecache'
+        self._cachedir = self.project_path / CACHEDIR_NAME
         self._attachments_dir = self._cachedir / 'attachments'
         config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
@@ -208,6 +211,16 @@ class Backend(BaseBackend):
 
         return image_pattern.sub(_sub, source), attachments
 
+    def confluence_unescape(self, source: str) -> str:
+        def _sub(match):
+            filename = match.group('hash')
+            self.logger.debug(f'Restoring escaped confluence code with hash {filename}')
+            filepath = self._cachedir / ESCAPE_DIR_NAME / filename
+            with open(filepath) as f:
+                return f.read()
+        pattern = re.compile("\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
+        return pattern.sub(_sub, source)
+
     def add_comments(self, page: Page, new_content: str, resolve_changed: bool):
         '''
         Restore inline comments which were added to the page by users into
@@ -255,6 +268,7 @@ class Backend(BaseBackend):
         self.logger.debug('Converting HTML to Confluence storage format')
         new_content = editor_to_storage(self.con, new_content)
         new_content, attachments = self.process_images(new_content, filename)
+        new_content = self.confluence_unescape(new_content)
         if config.get('restore_comments', True):
             new_content = self.add_comments(page, new_content, self.config.get('resolve_if_changed', False))
 

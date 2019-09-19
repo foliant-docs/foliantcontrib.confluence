@@ -107,7 +107,10 @@ def generate_ref_dict(bs: BeautifulSoup) -> dict:
     refs = bs.find_all(re.compile('ac:inline-comment-marker'))
     for ref in refs:
         ref_id = ref.attrs['ac:ref']
-        full, (before, comment, after) = unwrap(ref)
+        try:
+            full, (before, comment, after) = unwrap(ref)
+        except RuntimeError:
+            continue
         cs = dict(full=full,
                   ref_id=ref_id,
                   before=before,

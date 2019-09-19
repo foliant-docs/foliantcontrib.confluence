@@ -190,3 +190,17 @@ backend_config:
     id: 124443
     title: New unique title
 ```
+
+## Inserting raw confluence tags
+
+If you want to add confluence macros to your article, or any other storage-specific html, you may do it by defining them inside the `<raw_confluence></raw_confluence>` tag.
+
+For example, if you wish to add a table of contents, but want it to be in the middle of the document for some reason, you can do something like this:
+
+```
+Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla quam doloribus delectus voluptate.
+
+<raw_confluence><ac:structured-macro ac:macro-id="1" ac:name="toc" ac:schema-version="1"/></raw_confluence>
+
+Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam cumque soluta sequi blanditiis, voluptatibus quaerat similique nihil debitis repellendus.
+```
