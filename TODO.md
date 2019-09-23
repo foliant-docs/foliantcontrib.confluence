@@ -1,2 +1,0 @@
-- escape links like <ac:...> <ri:...> in source and unescape after conversion. May escape with &lt;
-- 

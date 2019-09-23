@@ -176,3 +176,15 @@ class Page:
         self._update_properties(content)
 
         return content
+
+    def get_resolved_comment_ids(self) -> list:
+        if not self.exists:
+            return []
+        resolved_ids = set()
+        res = self._con.get_page_by_id(self.id, expand='children.comment.extensions.resolution,children.comment.extensions.inlineProperties')
+        for comment in res['children']['comment']['results']:
+            if 'inlineProperties' not in comment['extensions']:
+                continue  # it's a regular comment
+            if comment['extensions']['resolution']['status'] == 'resolved':
+                resolved_ids.update((comment['extensions']['inlineProperties']['markerRef'],))
+        return resolved_ids

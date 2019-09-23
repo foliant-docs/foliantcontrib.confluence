@@ -236,7 +236,7 @@ class Backend(BaseBackend):
                 if (ref_s is None) and (ref_e is None):
                     break
                 if (ref_s is not None) and (ref_s.start() < ref_e.start()):
-                    self.logger.debug(f'Found comment: {ref_s.group(0)}')
+                    self.logger.debug(f'Found comment : {ref_s.group(0)}')
                     open_refs.append((ref_s.group(1), ref_s.start()))
                     source = source[:ref_s.start()] +\
                         source[ref_s.end():]
@@ -250,7 +250,13 @@ class Backend(BaseBackend):
         if not page.exists:
             return new_content
 
-        return restore_refs(page.body, new_content, self.logger,)
+        resolved = page.get_resolved_comment_ids()
+        self.logger.debug(f'Got list of resolved comments in the text:\n{resolved}')
+
+        return restore_refs(page.body,
+                            new_content,
+                            resolved,
+                            self.logger)
 
     def _upload(self,
                 config: Options or dict,

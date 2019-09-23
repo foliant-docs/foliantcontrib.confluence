@@ -23,7 +23,7 @@ class Preprocessor(BasePreprocessorExt):
 
         self._escaped_dir = self.project_path / self.options['cachedir'] / self.options['escapedir']
         shutil.rmtree(self._escaped_dir, ignore_errors=True)
-        self._escaped_dir.mkdir()
+        self._escaped_dir.mkdir(parents=True)
 
         self.logger = self.logger.getChild('confluence')
 

@@ -12,6 +12,7 @@ logger = None
 
 def restore_refs(old_content: str,
                  new_content: str,
+                 resolved_ids: list,
                  logger_,
                  resolve_changed: bool = False):
     '''
@@ -26,6 +27,7 @@ def restore_refs(old_content: str,
 
     old_bs = BeautifulSoup(old_content, 'html.parser')
     new_bs = BeautifulSoup(new_content, 'html.parser')
+    remove_outline_resolved(old_bs, resolved_ids)
     ref_dict = generate_ref_dict(old_bs)
     new_strings = [s for s in new_bs.strings if s.strip()]
     old_strings = [s for s in old_bs.strings if s.strip()]
@@ -35,6 +37,47 @@ def restore_refs(old_content: str,
     if not resolve_changed:
         insert_unequal_refs(not_equal, new_strings)
     return str(new_bs)
+
+
+def remove_outline_resolved(bs: BeautifulSoup, resolved_ids: list):
+    logger.debug('remove_outline_resolved START')
+    while True:
+        restart = False
+        comments = bs.find_all(re.compile('ac:inline-comment-marker'))
+        for comment in comments:
+            for child in comment.children:
+                if child.name == 'ac:inline-comment-marker':
+                    logger.debug(f'Comment has nested comments, removing: \n{comment}')
+                    basic_unwrap(comment)
+                    restart = True
+                    break
+            if restart:
+                break
+        else:
+            logger.debug('remove_outline_resolved END')
+            return
+
+
+def basic_unwrap(element):
+    parent = element.parent
+    element.unwrap()
+    groupped = []
+    accumulate = False
+    for el in parent.contents:
+        if isinstance(el, NavigableString):
+            if accumulate:
+                groupped[-1].append(el)
+            else:
+                groupped.append([el])
+                accumulate = True
+        else:
+            accumulate = False
+    groupped = [g for g in groupped if len(g) > 1]
+    for g in groupped:
+        g[0].replace_with(''.join(g))
+        g.pop(0)
+        for i in g:
+            i.extract()
 
 
 def unwrap(element):
@@ -51,7 +94,6 @@ def unwrap(element):
       - element — original tag itself.
       - after — original NavigableString, that was after the tag or None if there wasn't any.
     '''
-    parent = element.parent
     before = after = None
     children = list(element.children)
     if len(children) > 1:
@@ -59,17 +101,12 @@ def unwrap(element):
     if len(children) == 1 and not isinstance(children[0], NavigableString):
         raise RuntimeError('Tag should include only string')
     content = element.text
-    siblings = parent.contents
-    ind = siblings.index(element)
-    if ind > 0 and isinstance(siblings[ind - 1], NavigableString):
-        content = siblings[ind - 1] + content
-        before = siblings[ind - 1]
-        siblings.pop(ind - 1)
-        ind -= 1
-    if ind < len(siblings) - 1 and isinstance(siblings[ind + 1], NavigableString):
-        content = content + siblings[ind + 1]
-        after = siblings[ind + 1]
-        siblings.pop(ind + 1)
+    if isinstance(element.previous_sibling, NavigableString):
+        before = element.previous_sibling.extract()
+        content = before + content
+    if isinstance(element.next_sibling, NavigableString):
+        after = element.next_sibling.extract()
+        content = content + after
     ns = NavigableString(content)
     element.replace_with(ns)
     return ns, (before, element, after)
@@ -110,13 +147,15 @@ def generate_ref_dict(bs: BeautifulSoup) -> dict:
         try:
             full, (before, comment, after) = unwrap(ref)
         except RuntimeError:
+            logger.debug("Inline comment tag has other tags inside. We can't"
+                         f" process such yet, skipping:\n{ref}")
             continue
         cs = dict(full=full,
                   ref_id=ref_id,
                   before=before,
                   comment=comment,
                   after=after)
-
+#
         # if 'before string' was already added to result — absorb the comment
         # dictionary instead
         if cs['before'] and id(cs['before']) in result:
@@ -133,11 +172,11 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     For each element of ref_dict: Find strings in `new_strings` which correspond
     to the commented string, described by `ref_dict` element. This string is one
     of the `old_strings`.
-
+#
     Return a list of tuples, each containing three elements:
-
+#
     [(info_dict, indeces, equal)]
-
+#
     - info_dict — an {info_dict} of the inline comment.
     - indeces — a list of indeces of the `new_strings` which correspond to the
       inline comment in the old text.
@@ -146,7 +185,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     '''
     logger.debug('find_place2 START')
     result = []
-
+#
     # strip all strings from indentations and formatting for comparison
     s_old_strings = [s.strip() for s in old_strings]
     s_new_strings = [s.strip() for s in new_strings]
@@ -156,7 +195,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     Opcode = namedtuple('opcode', ('tag', 'a_s', 'a_e', 'b_s', 'b_e'))
     opcodes = [Opcode(*opc) for opc in sm.get_opcodes()]
     logger.debug(f'Opcodes after matching: {sm.get_opcodes()}')
-
+#
     # We use IDs to determine the correct string because the tree may contain
     # strings with equal values, but located in different parts of the tree. ID
     # allows to determine the correct string precisely.
@@ -164,7 +203,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     for cs_id in ref_dict:
         equal = False
         ind = old_string_ids.index(cs_id)
-
+#
         for i in range(len(opcodes)):
             if opcodes[i].a_s <= ind < opcodes[i].a_e:
                 break
@@ -172,7 +211,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
             i = None
         if i is None:
             continue
-
+#
         if opcodes[i].tag == 'equal':
             indeces = [opcodes[i].b_s + (ind - opcodes[i].a_s)]
             equal = True
