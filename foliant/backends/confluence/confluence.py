@@ -17,6 +17,11 @@ from foliant.preprocessors.utils.combined_options import (Options, val_type,
 from .classes import Page
 from .ref_diff import restore_refs
 
+# disabling confluence logger because it litters up output
+from unittest.mock import Mock
+import atlassian.confluence
+atlassian.confluence.log = Mock()
+
 
 SINGLE_MODE = 'single'
 MULTIPLE_MODE = 'multiple'
