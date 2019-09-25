@@ -1,9 +1,4 @@
-import shutil
-import re
-import os
-
-from subprocess import run, PIPE, STDOUT
-from pathlib import Path, PosixPath
+from pathlib import Path
 from getpass import getpass
 
 from atlassian import Confluence
@@ -14,8 +9,11 @@ from foliant.meta_commands.generate import generate_meta
 from foliant.cli.meta.utils import get_processed
 from foliant.preprocessors.utils.combined_options import (Options, val_type,
                                                           validate_in)
+
 from .classes import Page
-from .ref_diff import restore_refs
+from .convert import (md_to_editor, process_images, confluence_unescape,
+                      editor_to_storage, add_comments, add_toc, set_up_logger,
+                      update_attachments)
 
 # disabling confluence logger because it litters up output
 from unittest.mock import Mock
@@ -26,46 +24,12 @@ atlassian.confluence.log = Mock()
 SINGLE_MODE = 'single'
 MULTIPLE_MODE = 'multiple'
 CACHEDIR_NAME = '.confluencecache'
+ATTACHMENTS_DIR_NAME = 'attachments'
 ESCAPE_DIR_NAME = 'escaped'
 
 
 class BadParamsException(Exception):
     pass
-
-
-def unique_name(dest_dir: str or PosixPath, old_name: str) -> str:
-    """
-    Check if file with old_name exists in dest_dir. If it does —
-    add incremental numbers until it doesn't.
-    """
-    counter = 1
-    dest_path = Path(dest_dir)
-    name = old_name
-    while (dest_path / name).exists():
-        counter += 1
-        name = f'_{counter}'.join(os.path.splitext(old_name))
-    return name
-
-
-def editor_to_storage(con: Confluence, source: str):
-    """
-    Convert source string from confluence editor format to storage format
-    and return it
-    """
-    data = {"value": source, "representation": "editor"}
-    res = con.post('rest/api/contentbody/convert/storage', data=data)
-    if res and 'value' in res:
-        return res['value']
-    else:
-        raise RuntimeError('Cannot convert editor to storage. Got response:'
-                           f'\n{res}')
-
-
-def add_toc(source: str) -> str:
-    """Add table of contents to the beginning of the page source"""
-    result = '<ac:structured-macro ac:macro-id="1" '\
-        'ac:name="toc" ac:schema-version="1"/>\n' + source
-    return result
 
 
 class Backend(BaseBackend):
@@ -77,14 +41,18 @@ class Backend(BaseBackend):
                                                     'escapedir': ESCAPE_DIR_NAME}}]
 
     defaults = {'mode': 'single',
-                'toc': False, }
+                'toc': False,
+                'pandoc_path': 'pandoc',
+                'restore_comments': True,
+                'resolve_if_changed': False}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._flat_src_file_path = self.working_dir / self._flat_src_file_name
         self._cachedir = self.project_path / CACHEDIR_NAME
-        self._attachments_dir = self._cachedir / 'attachments'
+        self._cachedir.mkdir(exist_ok=True)
+        self._attachments_dir = self._cachedir / ATTACHMENTS_DIR_NAME
         config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
 
@@ -96,6 +64,7 @@ class Backend(BaseBackend):
         self.logger = self.logger.getChild('confluence')
 
         self.logger.debug(f'Backend inited: {self.__dict__}')
+        set_up_logger(self.logger)
 
     def _get_options(self, config: dict) -> Options:
         '''
@@ -118,18 +87,6 @@ class Backend(BaseBackend):
                                     ('host', 'title', 'space_key')])
         return options
 
-    def _prepare_cache_dir(self):
-        """
-        Create the cache dir (if it doesn't exist), cleanup the
-        attachments dir or create it if it doesn't exist.
-        """
-        self.logger.debug(f'Creating and cleaning up cahce dir {self._cachedir}')
-        self._cachedir.mkdir(exist_ok=True)
-
-        # cleaning attachments
-        shutil.rmtree(self._attachments_dir, ignore_errors=True)
-        self._attachments_dir.mkdir()
-
     def _connect(self, host: str, login: str, password: str) -> Confluence:
         """Connect to Confluence server and test connection"""
         self.logger.debug(f'Trying to connect to confluence server at {host}')
@@ -142,161 +99,35 @@ class Backend(BaseBackend):
         if isinstance(res, str) or 'statusCode' in res:
             raise RuntimeError(f'Cannot connect to {host}:\n{res}')
 
-    def _md_to_editor(self, con: Confluence, source: str):
-        """
-        Convert md source string to HTML with Pandoc, fix pandoc image tags,
-        for confluence doesn't understand <figure> and <figcaption> tags.
-
-        Return the resulting HTML string.
-        """
-        def _sub_image(match):
-            """
-            Convert image with pandoc <figcaption> tag into classic html image
-            with caption in alt=""
-            """
-            image_caption = match.group('caption')
-            image_path = match.group('path')
-            result = f'<img src="{image_path}" alt="{image_caption}">'
-            self.logger.debug(f'\nold: {match.group(0)}\nnew: {result}')
-            return result
-        md_source = self._cachedir / 'to_convert.md'
-        converted = self._cachedir / 'converted.html'
-        with open(md_source, 'w') as f:
-            f.write(source)
-        pandoc = self.options.get('pandoc_path', 'pandoc')
-        command = f'{pandoc} {md_source} -f markdown -t html -o {converted}'
-
-        self.logger.debug('Converting MD to HTML with Pandoc, command:\n' +
-                          command)
-        run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
-
-        with open(converted) as f:
-            result = f.read()
-
-        self.logger.debug('Fixing pandoc image captions.')
-
-        image_pattern = re.compile(r'<figure>\s*<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)\s*</figure>')
-        return image_pattern.sub(_sub_image, result)
-
-    def process_images(self, source: str, filename: str or Path) -> str:
-        """
-        Copy local images to cache dir with unique names, replace their HTML
-        definitions with confluence definitions
-        """
-
-        def _sub(image):
-            image_caption = image.group('caption')
-            image_path = image.group('path')
-
-            # leave external images as is
-            if image_path.startswith('http'):
-                return image.group(0)
-
-            image_path = Path(filename).parent / image_path
-
-            self.logger.debug(f'Found image: {image.group(0)}')
-
-            new_name = unique_name(self._attachments_dir,
-                                   os.path.split(image_path)[1])
-            new_path = self._attachments_dir / new_name
-
-            self.logger.debug(f'Copying image into: {new_path}')
-            shutil.copy(image_path, new_path)
-            attachments.append(new_path)
-
-            img_ref = f'<ac:image ac:title="{image_caption}"><ri:attachment ri:filename="{new_name}"/></ac:image>'
-
-            self.logger.debug(f'Converted image ref: {img_ref}')
-            return img_ref
-
-        image_pattern = re.compile(r'<img src="(?P<path>.+?)" +(?:alt="(?P<caption>.*?)")?.+?>')
-        attachments = []
-
-        self.logger.debug('Processing images')
-
-        return image_pattern.sub(_sub, source), attachments
-
-    def confluence_unescape(self, source: str) -> str:
-        def _sub(match):
-            filename = match.group('hash')
-            self.logger.debug(f'Restoring escaped confluence code with hash {filename}')
-            filepath = self._cachedir / ESCAPE_DIR_NAME / filename
-            with open(filepath) as f:
-                return f.read()
-        pattern = re.compile("\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
-        return pattern.sub(_sub, source)
-
-    def add_comments(self, page: Page, new_content: str, resolve_changed: bool):
-        '''
-        Restore inline comments which were added to the page by users into
-        the new_content.
-        '''
-        def collect_refs(source: str):
-            refs = []
-            open_refs = []
-            while True:
-                ref_s = re.search('<ac:inline-comment-marker\s+ac:ref="(.+?)">',
-                                  source)
-                ref_e = re.search('</ac:inline-comment-marker>', source)
-                if (ref_s is None) and (ref_e is None):
-                    break
-                if (ref_s is not None) and (ref_s.start() < ref_e.start()):
-                    self.logger.debug(f'Found comment : {ref_s.group(0)}')
-                    open_refs.append((ref_s.group(1), ref_s.start()))
-                    source = source[:ref_s.start()] +\
-                        source[ref_s.end():]
-                else:
-                    refs.append((*open_refs.pop(), ref_e.start()))
-                    source = source[:ref_e.start()] +\
-                        source[ref_e.end():]
-            return refs, source
-
-        self.logger.debug('Restoring inline comments.')
-        if not page.exists:
-            return new_content
-
-        resolved = page.get_resolved_comment_ids()
-        self.logger.debug(f'Got list of resolved comments in the text:\n{resolved}')
-
-        return restore_refs(page.body,
-                            new_content,
-                            resolved,
-                            self.logger)
-
     def _upload(self,
                 config: Options or dict,
                 content: str,
                 filename: str or Path):
         '''Upload one md-file to Confluence. Filename needed to fix the images'''
-        id_ = config.get('id')
-        space_key = config.get('space_key')
         title = config.get('title')
-        parent_id = config.get('parent_id')
-        page = Page(self.con, space_key, title, parent_id, id_)
+        page = Page(self.con,
+                    config.get('space_key'),
+                    title,
+                    config.get('parent_id'),
+                    config.get('id'))
 
-        new_content = self._md_to_editor(self.con, content)
+        new_content = md_to_editor(content, self._cachedir, config['pandoc_path'])
 
         self.logger.debug('Converting HTML to Confluence storage format')
         new_content = editor_to_storage(self.con, new_content)
-        new_content, attachments = self.process_images(new_content, filename)
-        new_content = self.confluence_unescape(new_content)
-        if config.get('restore_comments', True):
-            new_content = self.add_comments(page, new_content, self.config.get('resolve_if_changed', False))
+        new_content, attachments = process_images(new_content,
+                                                  Path(filename).parent,
+                                                  self._attachments_dir)
+        update_attachments(page, attachments, title)
+        new_content = confluence_unescape(new_content, self._cachedir / ESCAPE_DIR_NAME)
 
         if config['toc']:
             new_content = add_toc(new_content)
 
-        if attachments:
-            # we can only upload attachments to existing page
-            if not page.exists:
-                self.logger.debug('Page does not exist. Creating an empty one '
-                                  'to upload attachments')
-                page.create_empty_page(title)
-            else:
-                self.logger.debug('Removing old attachments and adding new')
-                page.delete_all_attachments()
-            for img in attachments:
-                page.upload_attachment(img)
+        if config['restore_comments']:
+            new_content = add_comments(page,
+                                       new_content,
+                                       config['resolve_if_changed'])
 
         need_update = page.need_update(new_content, title)
         if need_update:
@@ -352,10 +183,9 @@ class Backend(BaseBackend):
 
     def make(self, target: str) -> str:
         with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
-            output('', self.quiet)
+            output('', self.quiet)  # empty line for better output
             try:
                 Options(self.options, required=['host'])
-                self._prepare_cache_dir()
                 if "login" not in self.options:
                     msg = f"Please input login for {self.options['host']}:\n"
                     msg = '\n!!! User input required !!!\n' + msg
