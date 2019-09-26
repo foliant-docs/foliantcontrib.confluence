@@ -1,6 +1,8 @@
 from pathlib import PosixPath
 from atlassian import Confluence
 
+from .extracter import extract
+
 
 class PageNotAssignedError(Exception):
     pass
@@ -84,12 +86,34 @@ class Page:
         return self._body
 
     @property
+    def full_body(self):
+        return self._before + self.body + self._after
+
+    @property
     def id(self):
         return self._id
 
     @property
     def parent_id(self):
         return self._parent_id
+
+    def generate_new_body(self, new_content: str) -> str:
+        '''
+        Construct a new body of the page by surrounding `new_content` with static
+        content from the page, and opening/closing foliant tags.
+        If there was no static content — just return the `new_content`.
+        '''
+        MACRO = '''<p>
+  <ac:structured-macro ac:macro-id="0" ac:name="anchor" ac:schema-version="1">
+    <ac:parameter ac:name="">{name}</ac:parameter>
+  </ac:structured-macro>
+</p>'''
+        if self._before or self._after:
+            result = self._before + MACRO.format(name="foliant_start")
+            result += new_content + MACRO.format(name="foliant_end") + self._after
+        else:
+            result = new_content
+        return result
 
     def _get_info(self):
         if self._id:
@@ -112,7 +136,7 @@ class Page:
     def _update_properties(self, content: dict):
         self._content = content
         self._id = content['id']
-        self._body = content['body']['storage']['value']
+        self._before, self._body, self._after = extract(content['body']['storage']['value'])
         if self.title is None:
             self._title = content['title']
 
@@ -160,9 +184,10 @@ class Page:
 
     def upload_content(self, new_content: str, title: str = None):
         if self.exists:
+            # space at the end to force-update page
+            body = self.generate_new_body(new_content)
             content = self._con.update_page(page_id=self._id,
-                                            # adding space to force-update page
-                                            body=new_content + ' ',
+                                            body=body,
                                             title=title or self.title)
         else:
             content = self._con.create_page(type='page',
