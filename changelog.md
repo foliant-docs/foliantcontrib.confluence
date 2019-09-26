@@ -1,6 +1,6 @@
 # 0.6.0
 
-- 
+- Now content is put in place of `foliant` anchor or instead of `foliant_start`...`foliant_end` anchors on the target page. If no anchors on page — content replaces the whole body.
 
 # 0.5.2
 
