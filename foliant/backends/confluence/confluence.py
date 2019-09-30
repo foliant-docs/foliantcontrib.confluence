@@ -1,4 +1,5 @@
-import traceback
+import shutil
+import os
 
 from pathlib import Path
 from getpass import getpass
@@ -10,13 +11,12 @@ from foliant.backends.base import BaseBackend
 from foliant.meta_commands.generate import generate_meta
 from foliant.cli.meta.utils import get_processed
 from foliant.preprocessors import flatten
-from foliant.preprocessors.utils.combined_options import (Options, val_type,
-                                                          validate_in)
+from foliant.preprocessors.utils.combined_options import (Options, val_type)
 
 from .classes import Page
 from .convert import (md_to_editor, process_images, confluence_unescape,
                       editor_to_storage, add_comments, add_toc, set_up_logger,
-                      update_attachments)
+                      update_attachments, unique_name)
 
 # disabling confluence logger because it litters up output
 from unittest.mock import Mock
@@ -29,6 +29,8 @@ MULTIPLE_MODE = 'multiple'
 CACHEDIR_NAME = '.confluencecache'
 ATTACHMENTS_DIR_NAME = 'attachments'
 ESCAPE_DIR_NAME = 'escaped'
+DEBUG_DIR_NAME = 'debug'
+REMOTE_ATTACHMENTS_DIR_NAME = 'remote_attachments'
 
 
 class BadParamsException(Exception):
@@ -47,47 +49,57 @@ class Backend(BaseBackend):
                 'toc': False,
                 'pandoc_path': 'pandoc',
                 'restore_comments': True,
-                'resolve_if_changed': False}
+                'resolve_if_changed': False,
+                'notify_watchers': False}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._cachedir = (self.project_path / CACHEDIR_NAME).resolve()
         self._cachedir.mkdir(exist_ok=True)
+
+        self._debug_dir = self._cachedir / DEBUG_DIR_NAME
+        shutil.rmtree(self._debug_dir, ignore_errors=True)
+        self._debug_dir.mkdir(exist_ok=True)
+
         self._flat_src_file_path = self._cachedir / self._flat_src_file_name
         self._attachments_dir = self._cachedir / ATTACHMENTS_DIR_NAME
         config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
-
-        # # in single mode we use flat file, in multiple mode — working_dir
-        # if self.options['mode'] == 'single':
-        #     self.required_preprocessors_after.\
-        #         append({'flatten': {'flat_src_file_name': self._flat_src_file_name}})
 
         self.logger = self.logger.getChild('confluence')
 
         self.logger.debug(f'Backend inited: {self.__dict__}')
         set_up_logger(self.logger)
 
-    def _get_options(self, config: dict) -> Options:
+    def backup_debug_info(self):
+        '''Copy debug files from the cachedir to debug dir'''
+        _, _, files = next(os.walk(self._cachedir))
+        for file in files:
+            new_name = unique_name(self._debug_dir, file)
+            shutil.copy(self._cachedir / file, self._debug_dir / new_name)
+
+    def _get_options(self, *configs) -> Options:
         '''
-        Update backend options from foliant.yml with `config` dictionary,
-        create an Options object with the necessary checks and return it.
+        Get a list of dictionaries, all of which will be merged in one and
+        transered to an Options object with necessary checks.
+
+        Returns the resulting Options object.
         '''
-        # modes = [SINGLE_MODE, MULTIPLE_MODE]
-        options = {**self.options, **config}
+        options = {}
+        for config in configs:
+            options.update(config)
         options = Options(options,
                           validators={'host': val_type(str),
                                       'login': val_type(str),
                                       'password': val_type(str),
-                                      'page_id': val_type([str, int]),
+                                      'id': val_type([str, int]),
                                       'parent_id': val_type([str, int]),
-                                      'tx  itle': val_type(str),
+                                      'title': val_type(str),
                                       'space_key': val_type(str),
                                       'pandoc_path': val_type(str),
-                                      # 'mode': validate_in(modes),
                                       },
-                          required=[('page_id',),
+                          required=[('id',),
                                     ('title', 'space_key')])
         return options
 
@@ -113,7 +125,7 @@ class Backend(BaseBackend):
                     config.get('space_key'),
                     title,
                     config.get('parent_id'),
-                    config.get('page_id'))
+                    config.get('id'))
 
         new_content = md_to_editor(content, self._cachedir, config['pandoc_path'])
 
@@ -122,7 +134,9 @@ class Backend(BaseBackend):
         new_content, attachments = process_images(new_content,
                                                   Path(filename).parent,
                                                   self._attachments_dir)
-        update_attachments(page, attachments, title)
+        update_attachments(page,
+                           attachments,
+                           self._cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
         new_content = confluence_unescape(new_content, self._cachedir / ESCAPE_DIR_NAME)
 
         if config['toc']:
@@ -135,11 +149,17 @@ class Backend(BaseBackend):
 
         need_update = page.need_update(new_content, title)
         if need_update:
-            self.logger.debug(f'Content to update:\n\n{new_content}')
-            page.upload_content(new_content, title)
+            with open(self._cachedir / 'to_upload.html', 'w') as f:
+                f.write(new_content)
+            self.logger.debug('Ready to upload. Content saved for debugging to '
+                              f'{self._cachedir / "to_upload.html"}')
+            minor_edit = not config['notify_watchers']
+            page.upload_content(new_content, title, minor_edit)
         else:
             self.logger.debug(f'Page with id {page.id} and title "{page.title}"'
                               " hadn't changed. Skipping.")
+
+        self.backup_debug_info()
 
         return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
             .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
@@ -153,8 +173,7 @@ class Backend(BaseBackend):
                       self.options['login'],
                       self.options['password'])
         result = []
-        # if self.options['mode'] == SINGLE_MODE:
-        if 'page_id' in self.options or ('title' in self.options and 'space_key' in self.options):
+        if 'id' in self.options or ('title' in self.options and 'space_key' in self.options):
             self.logger.debug('Uploading flat project to confluence')
             output(f'Building main project', self.quiet)
 
@@ -164,28 +183,32 @@ class Backend(BaseBackend):
                 self.quiet,
                 self.debug,
                 {'flat_src_file_name': self._flat_src_file_path,
-                 'rewrite': False}
+                 'keep_sources': True}
             ).apply()
 
             with open(self._flat_src_file_path, encoding='utf8') as f:
                 md_source = f.read()
-                # just to run the checks:
-                options = self._get_options({})
+                options = self._get_options(self.options)
 
                 self.logger.debug(f'Options: {options}')
             result.append(self._upload(options, md_source, self._flat_src_file_path))
 
-        # elif self.options['mode'] == MULTIPLE_MODE:
-        # self.logger.debug('Backernd runs in MULTIPLE mode')
         self.logger.debug('Searching chapters for meta')
         meta = generate_meta(self.context, self.logger)
         for chapter in meta:
 
-            if 'confluence' not in chapter.yfm:
+            if 'confluence' not in chapter.yfm or \
+                    not isinstance(chapter.yfm['confluence'], dict):
                 self.logger.debug(f'No "confluence" section in {chapter.name}), skipping.')
                 continue
+
+            # getting common options from foliant.yml and merging them with yfm
+            common_options = {}
+            uncommon_options = ['title', 'id', 'space_key', 'parent_id']
+            common_options = {k: v for k, v in self.options.items()
+                              if k not in uncommon_options}
             try:
-                options = self._get_options(chapter.yfm['confluence'])
+                options = self._get_options(common_options, chapter.yfm['confluence'])
             except Exception as e:
                 output(f'Skipping chapter {chapter}, wrong params: {e}', self.quiet)
                 self.logger.debug(f'Skipping chapter {chapter}, wrong params: {e}')

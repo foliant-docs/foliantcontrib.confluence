@@ -1,5 +1,8 @@
-from pathlib import PosixPath
+import os
+from pathlib import PosixPath, Path
+from urllib.parse import urlparse
 from atlassian import Confluence
+from bs4 import BeautifulSoup
 
 from .extracter import extract
 
@@ -140,6 +143,44 @@ class Page:
         if self.title is None:
             self._title = content['title']
 
+    def download_all_attachments(self, dest: PosixPath or str) -> dict:
+        '''
+        Download all attachments into the `dest` dir. Return a dictionary
+        with key = downloaded attachment filename; value = (its id, full path).
+        '''
+        if not self.exists:
+            return {}
+
+        result = {}
+        atts = self._con.get_attachments_from_content(self.id)
+        # base = atts['_links']['base']
+        for att in atts['results']:
+            try:
+                url = att['_links']['download'] + '&download=true'
+                filename = os.path.basename(urlparse(url).path)
+                filepath = (Path(dest) / filename).resolve()
+                r = self._con.request(path=url)
+            except KeyError:
+                continue
+            if r.status_code != 200:
+                continue
+            with open(filepath, 'wb') as f:
+                f.write(r.content)
+            result[filename] = (att['id'], filepath)
+        return result
+
+    def delete_attachment(self, att_id: int):
+        '''
+        Delete an attachment with `att_id`if page exists.
+        If not — do nothing.
+        '''
+        if self.exists:
+            res = self._con.request(method='DELETE',
+                                    path=f'rest/api/content/{att_id}')
+            if str(res.status_code)[0] != '2':
+                raise RuntimeError(f"Can't delete an attachment {att_id} on page {self.id}:"
+                                   f"\n{res.text}")
+
     def delete_all_attachments(self):
         '''
         Delete all attachments from the page if page exists.
@@ -148,11 +189,7 @@ class Page:
         if self.exists:
             attachments = self._con.get_attachments_from_content(self.id)['results']
             for att in attachments:
-                res = self._con.request(method='DELETE',
-                                        path=f'rest/api/content/{att["id"]}')
-                if str(res.status_code)[0] != '2':
-                    raise RuntimeError(f"Can't delete an attachment {att['id']} on page {self.id}:"
-                                       f"\n{res.text}")
+                self.delete_attachment(att['id'])
 
     def upload_attachment(self, filename: str or PosixPath):
         if not self.exists:
@@ -163,32 +200,43 @@ class Page:
                                f'\n{res}')
         return res
 
-    def create_empty_page(self, title: str):
-        '''create an empty page'''
+    def create_empty_page(self):
+        '''Create an empty page'''
         if self.exists:
             return
         else:
-            self.upload_content('', title)
+            self.upload_content('', self.title)
 
     def need_update(self, new_content: str, new_title: str or None = None):
         '''Check it page content and title differs from new_content'''
         # Method doesn't work right now. Maybe remove in future
         if not self.exists:
             return True
-        result = not\
-            self._con.is_page_content_is_already_updated(self.id, new_content)
+
+        # comparing content with bs4 prettify to get rid of insignificant
+        # formatting differences
+        result = True
+        old = BeautifulSoup(self.body.strip(), 'html.parser')
+        new = BeautifulSoup(new_content.strip(), 'html.parser')
+        result = old.prettify() != new.prettify()
+        # result = not\
+        #     self._con.is_page_content_is_already_updated(self.id, new_content)
         if not result:
             title = new_title or self.title
             result = self.content['title'] != title
         return result
 
-    def upload_content(self, new_content: str, title: str = None):
+    def upload_content(self,
+                       new_content: str,
+                       title: str = None,
+                       minor_edit: bool = True):
         if self.exists:
             # space at the end to force-update page
             body = self.generate_new_body(new_content)
             content = self._con.update_page(page_id=self._id,
                                             body=body,
-                                            title=title or self.title)
+                                            title=title or self.title,
+                                            minor_edit=minor_edit)
         else:
             content = self._con.create_page(type='page',
                                             title=title or self.title,

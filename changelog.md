@@ -1,6 +1,11 @@
 # 0.6.0
 
 - Now content is put in place of `foliant` anchor or instead of `foliant_start`...`foliant_end` anchors on the target page. If no anchors on page — content replaces the whole body.
+- New modes (backwards compatibility is broken!).
+- Now following files are available for debug in cache dir: 1. markdown before conversion to html. 2. Converted to HTML. 3. Final XHTML source which is uploaded to confluence.
+- Working (but far from perfect) detection if file was changed.
+- Only upload changed attachments.
+- Updating attachments instead of deleting and uploading again.
 
 # 0.5.2
 

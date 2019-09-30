@@ -2,7 +2,7 @@
 
 # Confluence backend for Foliant
 
-Confluence backend generates a confluence article and uploads it into your confluence server. With it you can create and edit pages in Confluence based on your Foliant project.
+Confluence backend generates confluence articles and uploads them on your confluence server. It can create and edit pages in Confluence with content based on your Foliant project.
 
 It also has a feature of restoring the user inline comments, added for the article, even after the commented fragment was changed.
 
@@ -25,12 +25,13 @@ $ foliant make confluence
 Parsing config... Done
 Making confluence... Done
 ────────────────────
-Result: https://my_confluence_server.org/pages/viewpage.action?pageId=123
+Result:
+https://my_confluence_server.org/pages/viewpage.action?pageId=123 (Page Title)
 ```
 
 ## Config
 
-You have to set up a config for this backend to work properly.
+You have to set up correct config for this backend to work properly.
 
 Specify all options in `backend_config.confluence` section:
 
@@ -39,49 +40,46 @@ backend_config:
   confluence:
     host: 'https://my_confluence_server.org'
     login: user
-    password: pass
-    mode: single
-    toc: false
+    password: user_password
     id: 124443
     title: Title of the page
     space_key: "~user"
     parent_id: 124442
-    pandoc_path: pandoc
+    notify_watchers: false
+    toc: false
     restore_comments: true
     resolve_if_changed: false
+    pandoc_path: pandoc
 ```
 
 `host`
 :   **Required** Host of your confluence server.
 
 `login`
-:   Login of the user who has the rights to create and update pages. If login is not supplied, it will be prompted during build
+:   Login of the user who has permissions to create and update pages. If login is not supplied, it will be prompted during build.
 
 `password`
-:   Password of the user. If password is not supplied, it will be prompted during build
-
-`mode`
-:   One of: `single`, `multiple`. In single mode backend uploads the whole Foliant project into specified Confluence page. In multiple mode backend uploads several chapters into separate Confluecnce pages defined with metadata. More info in the **Modes** section. Default: `single`.
-
-`toc`
-:   Set to `true` to add table of contents into the beginning of the document. Default: `false`
+:   Password of the user. If password is not supplied, it will be prompted during build.
 
 `id`
-:   ID of the page into which the content will be uploaded (use only with `single` mode). *Only for already existing pages*
+:   ID of the page where the content will be uploaded. *Only for already existing pages*
 
 `title`
-:   Title of the page to be created or updated (use only with `single` mode).
+:   Title of the page to be created or updated.
 
-> Remember that titles of the pages in one space are unique in Confluence.
+> Remember that page titles in the space have to be unique.
 
 `space_key`
-:   The key of the space where the page(s) will be created/edited.
+:   The space key where the page(s) will be created/edited. *Only for not yet existing pages*.
 
 `parent_id`
 :   ID of the parent page under which the new one(s) should be created. *Only for not yet existing pages*.
 
-`pandoc_path`
-:   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
+`notify_watchers`
+:   If `true` — watchers will be notified that the page has changed. Default: `false`
+
+`toc`
+:   Set to `true` to add table of contents to the beginning of the document. Default: `false`
 
 `restore_comments`
 :   Attempt to restore inline comments near the same places after updating the page. Default: `true`
@@ -89,24 +87,18 @@ backend_config:
 `resolve_if_changed`
 :   Delete inline comment from the source if the commented text was changed. This will automatically mark comment as resolved. Default: `false`
 
-## Modes
+`pandoc_path`
+:   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
 
-Backend confluence can work in two modes:
+# User's guide
 
-`single` — the whole project is flattened and uploaded into a single Confluence page;
-`multiple` — you may upload several chapters of your project into separate Confluence pages.
+## Uploading articles
 
-### single mode
+By default if you specify `id` or `space_key` and `title` in foliant.yml, the whole project will be built and uploaded to this page.
 
-To use single mode first supply an option `mode: single` in foliant.yml, and then specify all the page properties (id or title & space) in the same foliant.yml config file. The project will be built, flattened into a single page and uploaded under the defined properties.
+If you wish to upload separate chapters into separate articles, you need to specify the respective `id` or `space_key` and `title` in *meta section* of the chapter.
 
-### multiple mode
-
-With the power of multiple mode you may create or update several Confluence pages with just one `make` command.
-
-To switch on multiple mode, add an option `mode: multiple` to your foliant.yml file. Next, add properties defining the confluence page (like id or title & space) to the meta section of each chapter that you want to upload.
-
-Meta section is a YAML field-value section in the beginning of the document, which is defined like this:
+Meta section is a YAML-formatted field-value section in the beginning of the document, which is defined like this:
 
 ```yaml
 ---
@@ -117,63 +109,51 @@ field2: value
 Your chapter md-content
 ```
 
-So if you want to upload a chapter into confluence, add something like this into the beginning of it:
+If you want to upload a chapter into confluence, add its properties under the `confluence` key like this:
 
 ```yaml
 ---
-title: My confluence page
-space_key: "~user"
-confluence: true  # this is required
+confluence:
+    title: My confluence page
+    space_key: "~user"
 ---
 
 You chapter md-content
 ```
 
-> Notice that we've also added a `confluence: true` key, which is required for chapter to be uploaded. If the key is `false` or is not defined, the backend will ignore this chapter.
+> **Important notice!**
+> Both modes work together. If you specify the `id1` in foliant.yml and `id2` in chapter's meta — the whole project will be uploaded to the page with `id1`, and the specific chapter will also be uploaded to page with `id2`.
 
-After you've added properties to every page you want to be uploaded, run the same `make confluence` command:
+## Creating pages
 
-```
-$ foliant make confluence
-Parsing config... Done
-Making confluence... Done
-────────────────────
-Result:
-https://my_confluence_server.org/pages/viewpage.action?pageId=1231
-https://my_confluence_server.org/pages/viewpage.action?pageId=1232
-https://my_confluence_server.org/pages/viewpage.action?pageId=1233
-```
-
-## Creating pages with confluence backend
-
-If you want a new page to be created for content in your Foliant project, just supply the title and the space key in the config. Remember that in Confluence page titles are unique inside one space. If you use a title of already existing page, the backend will attempt to edit it and replace its content with your project.
+If you want a new page to be created for content in your Foliant project, just supply in foliant.yml the space key and a title which does not yet exist in this space. Remember that in Confluence page titles are unique inside one space. If you use a title of an already existing page, the backend will attempt to edit it and replace its content with your project.
 
 Example config for this situation is:
 
 ```yaml
 backend_config:
   confluence:
-    host: 'https://my_confluence_server.org'
+    host: https://my_confluence_server.org
     login: user
     password: pass
     title: My unique title
     space_key: "~user"
 ```
 
-Now if you change the title in your config, confluence will *create a new page with the new title*, the old one remaining intact.
+Now if you change the title in your config, confluence will *create a new page with the new title*, leaving the old one intact.
 
 If you want to change the title of your page, the answer is in the following section.
 
-## Updating pages with confluence backend
+## Updating pages
 
-Generally to update the page contents you may use the same config you used to create it (see previous section).
+Generally to update the page contents you may use the same config you used to create it (see previous section). If the page with specified title exists, it will be updated.
 
-Also, you can just specify the id of your page, this way after build its contents will be updated.
+Also, you can just specify the id of an existing page. After build its contents will be updated.
 
 ```yaml
 backend_config:
   confluence:
-    host: 'https://my_confluence_server.org'
+    host: https://my_confluence_server.org
     login: user
     password: pass
     id: 124443
@@ -184,20 +164,34 @@ This is also *the only* way to edit a page title. If `title` param is specified,
 ```yaml
 backend_config:
   confluence:
-    host: 'https://my_confluence_server.org'
+    host: https://my_confluence_server.org
     login: user
     password: pass
     id: 124443
     title: New unique title
 ```
 
+## Updating part of a page
+
+Confluence backend can also upload an article into the middle of a Confluence page, leaving all the rest of it intact. To do this you need to add an *Anchor* into your page in the place where you want Foliant content to appear.
+
+1. Go to Confluence web interface and open the article.
+2. Go to Edit mode.
+3. Put the cursor in the position where you want your Foliant content to be inserted and start typing `{anchor` to open the macros menu and locate the Anchor macro.
+4. Add an anchor with the name `foliant`.
+5. Save the page.
+
+Now if you upload content into this page (see two previous sections), Confluence backend will leave all text which was before and after the anchor intact, and add your Foliant content in the middle.
+
+You can also add two anchors: `foliant_start` and `foliant_end`. In this case all text between these anchors will be replaced by your Foliant content.
+
 ## Inserting raw confluence tags
 
-If you want to add confluence macros to your article, or any other storage-specific html, you may do it by defining them inside the `<raw_confluence></raw_confluence>` tag.
+If you want to supplement your page with confluence macros or any other storage-specific html, you may do it by wrapping them in the `<raw_confluence></raw_confluence>` tag.
 
-For example, if you wish to add a table of contents, but want it to be in the middle of the document for some reason, you can do something like this:
+For example, if you wish to add a table of contents into the middle of the document for some reason, you can do something like this:
 
-```
+```html
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla quam doloribus delectus voluptate.
 
 <raw_confluence><ac:structured-macro ac:macro-id="1" ac:name="toc" ac:schema-version="1"/></raw_confluence>
