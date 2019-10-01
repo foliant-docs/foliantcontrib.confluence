@@ -45,6 +45,7 @@ backend_config:
     title: Title of the page
     space_key: "~user"
     parent_id: 124442
+    parent_title: Parent
     notify_watchers: false
     toc: false
     restore_comments: true
@@ -74,6 +75,9 @@ backend_config:
 
 `parent_id`
 :   ID of the parent page under which the new one(s) should be created. *Only for not yet existing pages*.
+
+`parent_title`
+:   Another way to define parent of the page. Lower priority than `paren_di`. Title of the parent page under which the new one(s) should be created. Parent should exist under the space_key specified. *Only for not yet existing pages*.
 
 `notify_watchers`
 :   If `true` — watchers will be notified that the page has changed. Default: `false`

@@ -213,21 +213,20 @@ def update_attachments(page: Page,
             logger.debug('Page does not exist. Creating an empty one '
                          'to upload attachments')
             page.create_empty_page()
-        else:
-            cache_dir = Path(cache_dir)
-            shutil.rmtree(cache_dir, ignore_errors=True)
-            cache_dir.mkdir(exist_ok=True)
-            remote_dict = page.download_all_attachments(cache_dir)
-            for att in attachments:
-                if att.name in remote_dict:
-                    att_id, att_path = remote_dict[att.name]
-                    if cmp(att, att_path):  # attachment not changed
-                        logger.debug(f"Attachment {att.name} hadn't changed, skipping")
-                        continue
-                logger.debug(f"Attachment {att.name} CHANGED, reuploading")
-                # not sure if it's needed, we can update images without deleting
-                # page.delete_attachment(att_id)
-                page.upload_attachment(att)
+        cache_dir = Path(cache_dir)
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        cache_dir.mkdir(exist_ok=True)
+        remote_dict = page.download_all_attachments(cache_dir)
+        for att in attachments:
+            if att.name in remote_dict:
+                att_id, att_path = remote_dict[att.name]
+                if cmp(att, att_path):  # attachment not changed
+                    logger.debug(f"Attachment {att.name} hadn't changed, skipping")
+                    continue
+            logger.debug(f"Attachment {att.name} CHANGED, reuploading")
+            # not sure if it's needed, we can update images without deleting
+            # page.delete_attachment(att_id)
+            page.upload_attachment(att)
 
 
 def set_up_logger(logger_):

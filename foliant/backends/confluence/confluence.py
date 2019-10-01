@@ -37,6 +37,19 @@ class BadParamsException(Exception):
     pass
 
 
+def get_content_id_by_title(con: Confluence, title: str, space_key: str):
+    if not space_key:
+        raise BadParamsException('You have to add space_key if you specify '
+                                 'paret by title!')
+    try:
+        p = con.get_page_by_title(space_key, title)
+        if p and 'id' in p:
+            return p['id']
+    except:
+        pass
+    raise BadParamsException(f'Cannot find parent with title {title}')
+
+
 class Backend(BaseBackend):
     _flat_src_file_name = '__all__.md'
 
@@ -121,10 +134,19 @@ class Backend(BaseBackend):
                 filename: str or Path):
         '''Upload one md-file to Confluence. Filename needed to fix the images'''
         title = config.get('title')
+        parent_id = None
+        if 'id' not in config:
+            if 'parent_id' in config:
+                parent_id = config['parent_id']
+            elif 'parent_title' in config:
+                parent_id = get_content_id_by_title(self.con,
+                                                    config['parent_title'],
+                                                    config.get('space_key'))
+
         page = Page(self.con,
                     config.get('space_key'),
                     title,
-                    config.get('parent_id'),
+                    parent_id,
                     config.get('id'))
 
         new_content = md_to_editor(content, self._cachedir, config['pandoc_path'])
