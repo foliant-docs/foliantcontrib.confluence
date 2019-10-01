@@ -1,4 +1,4 @@
-# 0.6.1
+# 0.6.2
 
 - Added `parent_title` parameter.
 - Fix: images were not uploaded for new pages.
