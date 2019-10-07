@@ -1,3 +1,7 @@
+# 0.6.3
+
+- Remove resolved inline comments as they mix up with unresolved.
+
 # 0.6.2
 
 - Added `parent_title` parameter.

@@ -35,7 +35,7 @@ def restore_refs(old_content: str,
     equal, not_equal = correct_places(places)
     restore_equal_refs(equal, new_strings)
     if not resolve_changed:
-        insert_unequal_refs(not_equal, new_strings)
+        insert_unequal_refs(not_equal, new_strings, resolved_ids)
     return str(new_bs)
 
 
@@ -155,7 +155,7 @@ def generate_ref_dict(bs: BeautifulSoup) -> dict:
                   before=before,
                   comment=comment,
                   after=after)
-#
+
         # if 'before string' was already added to result — absorb the comment
         # dictionary instead
         if cs['before'] and id(cs['before']) in result:
@@ -171,12 +171,10 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     Compare `old_strings` and `new_strings`.
     For each element of ref_dict: Find strings in `new_strings` which correspond
     to the commented string, described by `ref_dict` element. This string is one
-    of the `old_strings`.
-#
-    Return a list of tuples, each containing three elements:
-#
+    of the `old_strings`.    Return a list of tuples, each containing three elements:
+
     [(info_dict, indeces, equal)]
-#
+
     - info_dict — an {info_dict} of the inline comment.
     - indeces — a list of indeces of the `new_strings` which correspond to the
       inline comment in the old text.
@@ -185,7 +183,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     '''
     logger.debug('find_place2 START')
     result = []
-#
+
     # strip all strings from indentations and formatting for comparison
     s_old_strings = [s.strip() for s in old_strings]
     s_new_strings = [s.strip() for s in new_strings]
@@ -195,7 +193,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     Opcode = namedtuple('opcode', ('tag', 'a_s', 'a_e', 'b_s', 'b_e'))
     opcodes = [Opcode(*opc) for opc in sm.get_opcodes()]
     logger.debug(f'Opcodes after matching: {sm.get_opcodes()}')
-#
+
     # We use IDs to determine the correct string because the tree may contain
     # strings with equal values, but located in different parts of the tree. ID
     # allows to determine the correct string precisely.
@@ -203,7 +201,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     for cs_id in ref_dict:
         equal = False
         ind = old_string_ids.index(cs_id)
-#
+
         for i in range(len(opcodes)):
             if opcodes[i].a_s <= ind < opcodes[i].a_e:
                 break
@@ -211,7 +209,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
             i = None
         if i is None:
             continue
-#
+
         if opcodes[i].tag == 'equal':
             indeces = [opcodes[i].b_s + (ind - opcodes[i].a_s)]
             equal = True
@@ -354,24 +352,33 @@ def restore_equal_refs(places: list, new_strings: list) -> None:
     logger.debug('restore_equal_refs END')
 
 
-def insert_unequal_refs(unequal: dict, new_strings: list):
+def insert_unequal_refs(unequal: dict, new_strings: list, resolved_ids: list):
     '''
     Receive an `unequal` dictionary with ref_ids and a list of strings of the
     new tree `new_strings`:
 
     unequal = {index: [list_of_ref_ids]}
     new_strings = [NavigableString]
+    resolved_ids = [resolved_ref_ids]
 
     Wrap each NavigableString determined by index from `unequal` dictionary in
     the corresponding inline-comment tag from the dict value. If the value
     contains several ref_ids — divide the string into equal chunks of text for
-    each ref_id.
+    each ref_id. If one ore more of these several ref_ids are resolved — they are
+    filtered out for better output. They will be removed from the source.
 
     Function returns nothing, the comments are restored in place.
     '''
     logger.debug('insert_unequal_refs START')
     for pos, refs in unequal.items():
-        logger.debug(f'Inserting refs into string #{pos}: {refs}')
+        logger.debug(f'Inserting refs into string #{pos}')
+        if len(refs) > 1:
+            logger.debug('More than one ref claim for this string.'
+                         'Leaving out resolved: '
+                         f'{[ref for ref in refs if ref in resolved_ids]}')
+            refs = [ref for ref in refs if ref not in resolved_ids]
+
+        logger.debug(f'Refs to insert: {refs}')
 
         contents = []
         ns = new_strings[pos]
