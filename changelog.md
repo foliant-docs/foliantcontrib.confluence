@@ -1,3 +1,7 @@
+# 0.6.4
+
+- Support meta 1.2. Now you can publish sections to confluence.
+
 # 0.6.3
 
 - Remove resolved inline comments as they mix up with unresolved.

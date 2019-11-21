@@ -8,8 +8,8 @@ from atlassian import Confluence
 
 from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
-from foliant.meta_commands.generate import generate_meta
-from foliant.cli.meta.utils import get_processed
+from foliant.meta_commands.generate.generate import load_meta
+# from foliant.cli.meta.utils import get_processed
 from foliant.preprocessors import flatten
 from foliant.preprocessors.utils.combined_options import (Options, val_type)
 
@@ -215,32 +215,34 @@ class Backend(BaseBackend):
                 self.logger.debug(f'Options: {options}')
             result.append(self._upload(options, md_source, self._flat_src_file_path))
 
-        self.logger.debug('Searching chapters for meta')
-        meta = generate_meta(self.context, self.logger)
-        for chapter in meta:
+        self.logger.debug('Searching metadata for confluence properties')
 
-            if 'confluence' not in chapter.yfm or \
-                    not isinstance(chapter.yfm['confluence'], dict):
-                self.logger.debug(f'No "confluence" section in {chapter.name}), skipping.')
+        chapters = self.config['chapters']
+        meta = load_meta(chapters, self.working_dir)
+        for section in meta.iter_sections():
+
+            if 'confluence' not in section.data or \
+                    not isinstance(section.data['confluence'], dict):
+                self.logger.debug(f'No "confluence" section in {section}), skipping.')
                 continue
 
-            # getting common options from foliant.yml and merging them with yfm
+            # getting common options from foliant.yml and merging them with meta fields
             common_options = {}
             uncommon_options = ['title', 'id', 'space_key', 'parent_id']
             common_options = {k: v for k, v in self.options.items()
                               if k not in uncommon_options}
             try:
-                options = self._get_options(common_options, chapter.yfm['confluence'])
+                options = self._get_options(common_options, section.data['confluence'])
             except Exception as e:
-                output(f'Skipping chapter {chapter}, wrong params: {e}', self.quiet)
-                self.logger.debug(f'Skipping chapter {chapter}, wrong params: {e}')
+                output(f'Skipping section {section}, wrong params: {e}', self.quiet)
+                self.logger.debug(f'Skipping section {section}, wrong params: {e}')
                 continue
-            self.logger.debug(f'Building {chapter.name}')
-            output(f'Building {chapter.name}', self.quiet)
-            md_source = get_processed(chapter, self.working_dir)
+            self.logger.debug(f'Building {section.chapter.filename}: {section.title}')
+            output(f'Building {section.title}', self.quiet)
+            md_source = section.get_source()
 
             self.logger.debug(f'Options: {options}')
-            original_file = self.project_path / self.config['src_dir'] / chapter.name
+            original_file = self.project_path / section.chapter.filename
             result.append(self._upload(options, md_source, original_file))
         if result:
             return '\n' + '\n'.join(result)
