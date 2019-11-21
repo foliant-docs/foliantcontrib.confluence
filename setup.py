@@ -16,7 +16,7 @@ setup(
     description=SHORT_DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    version='0.6.3',
+    version='0.6.4',
     author='Daniil Minukhin',
     author_email='ddddsa@gmail.com',
     url='https://github.com/foliant-docs/foliantcontrib.confluence',
@@ -29,7 +29,7 @@ setup(
         'foliantcontrib.utils.combined_options>=1.0.6',
         'foliantcontrib.utils.preprocessor_ext>=1.0.2',
         'foliantcontrib.flatten>=1.0.5',
-        'foliantcontrib.meta>=1.1.0',
+        'foliantcontrib.meta>=1.2.0',
         'beautifulsoup4',
     ],
     classifiers=[
