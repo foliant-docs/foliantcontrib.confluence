@@ -377,6 +377,9 @@ def insert_unequal_refs(unequal: dict, new_strings: list, resolved_ids: list):
                          'Leaving out resolved: '
                          f'{[ref for ref in refs if ref in resolved_ids]}')
             refs = [ref for ref in refs if ref not in resolved_ids]
+            if not refs:
+                logger.debug('All refs for the string were reseolved. Skipping')
+                continue
 
         logger.debug(f'Refs to insert: {refs}')
 

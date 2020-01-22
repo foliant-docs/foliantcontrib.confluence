@@ -1,3 +1,7 @@
+# 0.6.5
+
+- Fix: build crashed when several resolved inline comments referred to same string
+
 # 0.6.4
 
 - Support meta 1.2. Now you can publish sections to confluence.
