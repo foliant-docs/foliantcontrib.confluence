@@ -93,7 +93,7 @@ def detect_foliant_blocks(soup: BeautifulSoup) -> tuple:
     def get_anchor_name(element):
         for child in element.children:
             if child.name == 'ac:parameter':
-                return child.text
+                return child.text.lower()
         return None
     macros = soup.find_all(re.compile('ac:structured-macro'))
     open_anchor = close_anchor = None

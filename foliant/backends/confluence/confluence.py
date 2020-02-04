@@ -8,8 +8,7 @@ from atlassian import Confluence
 
 from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
-from foliant.meta_commands.generate.generate import load_meta
-# from foliant.cli.meta.utils import get_processed
+from foliant.meta.generate import load_meta
 from foliant.preprocessors import flatten
 from foliant.preprocessors.utils.combined_options import (Options, val_type)
 

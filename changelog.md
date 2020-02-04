@@ -1,3 +1,9 @@
+# 0.6.6
+
+- Support meta 1.3
+- Now foliant-anchors are always added around uploaded content
+- Anchors are now case insensitive
+
 # 0.6.5
 
 - Fix: build crashed when several resolved inline comments referred to same string

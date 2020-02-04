@@ -104,18 +104,18 @@ class Page:
         '''
         Construct a new body of the page by surrounding `new_content` with static
         content from the page, and opening/closing foliant tags.
-        If there was no static content — just return the `new_content`.
+        # If there was no static content — just return the `new_content`.
         '''
         MACRO = '''<p>
   <ac:structured-macro ac:macro-id="0" ac:name="anchor" ac:schema-version="1">
     <ac:parameter ac:name="">{name}</ac:parameter>
   </ac:structured-macro>
 </p>'''
-        if self._before or self._after:
-            result = self._before + MACRO.format(name="foliant_start")
-            result += new_content + MACRO.format(name="foliant_end") + self._after
-        else:
-            result = new_content
+        # if self._before or self._after:
+        result = self._before + MACRO.format(name="foliant_start")
+        result += new_content + MACRO.format(name="foliant_end") + self._after
+        # else:
+            # result = new_content
         return result
 
     def _get_info(self):
