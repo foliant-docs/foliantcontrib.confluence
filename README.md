@@ -1,4 +1,4 @@
-![](https://img.shields.io/pypi/v/foliantcontrib.confluence.svg)
+[![](https://img.shields.io/pypi/v/foliantcontrib.confluence.svg)](https://pypi.org/project/foliantcontrib.confluence/)
 
 # Confluence backend for Foliant
 
