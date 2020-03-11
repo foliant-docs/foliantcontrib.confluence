@@ -9,7 +9,7 @@ from atlassian import Confluence
 from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
 from foliant.meta.generate import load_meta
-from foliant.preprocessors import flatten
+from foliant.preprocessors import flatten, unescapecode
 from foliant.preprocessors.utils.combined_options import (Options, val_type)
 
 from .classes import Page
@@ -203,9 +203,20 @@ class Backend(BaseBackend):
                 self.logger,
                 self.quiet,
                 self.debug,
-                {'flat_src_file_name': self._flat_src_file_path,
+                {'flat_src_file_name': self._flat_src_file_name,
                  'keep_sources': True}
             ).apply()
+
+            unescapecode.Preprocessor(
+                self.context,
+                self.logger,
+                self.quiet,
+                self.debug,
+                {}
+            ).apply()
+
+            shutil.move(self.working_dir / self._flat_src_file_name,
+                        self._flat_src_file_path)
 
             with open(self._flat_src_file_path, encoding='utf8') as f:
                 md_source = f.read()

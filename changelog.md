@@ -1,3 +1,7 @@
+# 0.6.7
+
+- Fix another conflict with escapecode
+
 # 0.6.6
 
 - Support meta 1.3
