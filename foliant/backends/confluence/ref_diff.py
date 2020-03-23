@@ -27,7 +27,7 @@ def restore_refs(old_content: str,
 
     old_bs = BeautifulSoup(old_content, 'html.parser')
     new_bs = BeautifulSoup(new_content, 'html.parser')
-    remove_outline_resolved(old_bs, resolved_ids)
+    remove_outline_resolved(old_bs)
     ref_dict = generate_ref_dict(old_bs)
     new_strings = [s for s in new_bs.strings if s.strip()]
     old_strings = [s for s in old_bs.strings if s.strip()]
@@ -39,7 +39,12 @@ def restore_refs(old_content: str,
     return str(new_bs)
 
 
-def remove_outline_resolved(bs: BeautifulSoup, resolved_ids: list):
+def remove_outline_resolved(bs: BeautifulSoup):
+    """
+    Remove from bs object all inline comments which have nested comments inside
+    them. These may be only resolved comments, and they cause a lot of trouble.
+    In place.
+    """
     logger.debug('remove_outline_resolved START')
     while True:
         restart = False
@@ -59,6 +64,14 @@ def remove_outline_resolved(bs: BeautifulSoup, resolved_ids: list):
 
 
 def basic_unwrap(element):
+    """
+    Unwrap element from its tag in place. Concatenate adjacent NavigableStrings
+    which may have appeared after anwrapping:
+
+    <b>'One '<to_unwrap>' Two '</to_unwrap>' Three'</b>
+    <b>'One '' Two '' Three'</b>
+    <b>'One  Two  Three'</b>
+    """
     parent = element.parent
     element.unwrap()
     groupped = []
@@ -80,38 +93,6 @@ def basic_unwrap(element):
             i.extract()
 
 
-def unwrap(element):
-    '''
-    Unwrap an element from a tag in place. The tag must only contain one string inside.
-    The string will be connected to text before and after tag.
-    Function returns two elements:
-
-    full_string, (before, element, after)
-
-    - full_string — a full NavigableString, which replaced the tag and the text before/after;
-    - A tuple of three elements:
-      - before — original NavigableString, that was before the tag or None if there wasn't any.
-      - element — original tag itself.
-      - after — original NavigableString, that was after the tag or None if there wasn't any.
-    '''
-    before = after = None
-    children = list(element.children)
-    if len(children) > 1:
-        raise RuntimeError('Tag should wrap just one string')
-    if len(children) == 1 and not isinstance(children[0], NavigableString):
-        raise RuntimeError('Tag should include only string')
-    content = element.text
-    if isinstance(element.previous_sibling, NavigableString):
-        before = element.previous_sibling.extract()
-        content = before + content
-    if isinstance(element.next_sibling, NavigableString):
-        after = element.next_sibling.extract()
-        content = content + after
-    ns = NavigableString(content)
-    element.replace_with(ns)
-    return ns, (before, element, after)
-
-
 def generate_ref_dict(bs: BeautifulSoup) -> dict:
     '''
     Receives a BeautifulSoup object and generates a dictionary with info about
@@ -119,8 +100,8 @@ def generate_ref_dict(bs: BeautifulSoup) -> dict:
 
     Output dictionary structure:
 
-    Key: id of a string, which contains the inline comment. It's one of the strings
-         that may be obtained by BeautifulSoup.strings method.
+    Key: python id of a string, which contains the inline comment. It's one of
+         the strings that may be obtained by BeautifulSoup.strings method.
     Value: {info_dict}, dictionary with info on the inline comment.
 
     {info_dict} structure:
@@ -164,6 +145,38 @@ def generate_ref_dict(bs: BeautifulSoup) -> dict:
     logger.debug(f'Collected comments:\n\n{pformat(result)}')
     logger.debug('generate_ref_dict END')
     return result
+
+
+def unwrap(element):
+    '''
+    Unwrap an element from a tag in place. The tag must only contain one string inside.
+    The string will be connected to text before and after tag.
+    Function returns two elements:
+
+    full_string, (before, element, after)
+
+    - full_string — a full NavigableString, which replaced the tag and the text before/after;
+    - A tuple of three elements:
+      - before — original NavigableString, that was before the tag or None if there wasn't any.
+      - element — original tag itself.
+      - after — original NavigableString, that was after the tag or None if there wasn't any.
+    '''
+    before = after = None
+    children = list(element.children)
+    if len(children) > 1:
+        raise RuntimeError('Tag should wrap just one string')
+    if len(children) == 1 and not isinstance(children[0], NavigableString):
+        raise RuntimeError('Tag should include only string')
+    content = element.text
+    if isinstance(element.previous_sibling, NavigableString):
+        before = element.previous_sibling.extract()
+        content = before + content
+    if isinstance(element.next_sibling, NavigableString):
+        after = element.next_sibling.extract()
+        content = content + after
+    ns = NavigableString(content)
+    element.replace_with(ns)
+    return ns, (before, element, after)
 
 
 def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
