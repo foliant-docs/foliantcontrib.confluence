@@ -48,6 +48,9 @@ class Page:
         - Space exists;
         - Parent exists.
         '''
+        if self.id:
+            # if id is stated, space and parent_id are ignored, no need to check
+            return
         if self.space:
             space = self._con.get_space(self.space)
             if isinstance(space, str):
@@ -135,6 +138,7 @@ class Page:
                 self._update_properties(page)
             else:
                 self._content = self._id = None
+                self._before = self._after = self._body = ''
 
     def _update_properties(self, content: dict):
         self._content = content
@@ -230,9 +234,8 @@ class Page:
                        new_content: str,
                        title: str = None,
                        minor_edit: bool = True):
+        body = self.generate_new_body(new_content)
         if self.exists:
-            # space at the end to force-update page
-            body = self.generate_new_body(new_content)
             content = self._con.update_page(page_id=self._id,
                                             body=body,
                                             title=title or self.title,
@@ -241,7 +244,7 @@ class Page:
             content = self._con.create_page(type='page',
                                             title=title or self.title,
                                             space=self._space,
-                                            body=new_content,
+                                            body=body,
                                             parent_id=self.parent_id,
                                             representation='storage')
         if isinstance(content, str) or 'statusCode' in content:

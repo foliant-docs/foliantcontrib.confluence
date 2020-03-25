@@ -1,3 +1,7 @@
+# 0.6.8
+
+- Now foliant-anchors are always added even for new pages
+
 # 0.6.7
 
 - Fix another conflict with escapecode
