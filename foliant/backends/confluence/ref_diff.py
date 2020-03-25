@@ -184,7 +184,9 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     Compare `old_strings` and `new_strings`.
     For each element of ref_dict: Find strings in `new_strings` which correspond
     to the commented string, described by `ref_dict` element. This string is one
-    of the `old_strings`.    Return a list of tuples, each containing three elements:
+    of the `old_strings`.
+
+    Return a list of tuples, each containing three elements:
 
     [(info_dict, indeces, equal)]
 
@@ -200,7 +202,7 @@ def find_place2(old_strings, new_strings: list, ref_dict: dict) -> dict:
     # strip all strings from indentations and formatting for comparison
     s_old_strings = [s.strip() for s in old_strings]
     s_new_strings = [s.strip() for s in new_strings]
-    #
+
     sm = SequenceMatcher(None, s_old_strings, s_new_strings)
     sm.ratio()
     Opcode = namedtuple('opcode', ('tag', 'a_s', 'a_e', 'b_s', 'b_e'))
@@ -377,7 +379,7 @@ def insert_unequal_refs(unequal: dict, new_strings: list, resolved_ids: list):
     Wrap each NavigableString determined by index from `unequal` dictionary in
     the corresponding inline-comment tag from the dict value. If the value
     contains several ref_ids — divide the string into equal chunks of text for
-    each ref_id. If one ore more of these several ref_ids are resolved — they are
+    each ref_id. If one or more of these several ref_ids are resolved — they are
     filtered out for better output. They will be removed from the source.
 
     Function returns nothing, the comments are restored in place.

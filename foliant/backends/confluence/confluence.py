@@ -94,7 +94,7 @@ class Backend(BaseBackend):
     def _get_options(self, *configs) -> Options:
         '''
         Get a list of dictionaries, all of which will be merged in one and
-        transered to an Options object with necessary checks.
+        transfered to an Options object with necessary checks.
 
         Returns the resulting Options object.
         '''

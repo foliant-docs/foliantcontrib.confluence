@@ -26,7 +26,7 @@ setup(
     install_requires=[
         'foliant>=1.0.8',
         'atlassian-python-api',
-        'foliantcontrib.utils.combined_options>=1.0.6',
+        'foliantcontrib.utils.combined_options>=1.0.10',
         'foliantcontrib.utils.preprocessor_ext>=1.0.2',
         'foliantcontrib.flatten>=1.0.5',
         'foliantcontrib.meta>=1.3.0',

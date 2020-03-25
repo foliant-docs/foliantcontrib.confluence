@@ -1,13 +1,108 @@
+import re
 import shutil
 from hashlib import md5
+from pathlib import Path, PosixPath
+from subprocess import run, PIPE, STDOUT
+
+from atlassian import Confluence
+from bs4 import BeautifulSoup, Tag
 
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
+from foliant.preprocessors.utils.combined_options import CombinedOptions
+
+from foliant.backends.confluence.classes import Page
+
+
+ESCAPE_TAG = 'raw_confluence'
+IMPORT_TAG = 'confluence'
+IMG_DIR = '_confluence_attachments'
+DEBUG_FILENAME = 'import_debug.html'
+
+
+def process(page: Page, filename: str or PosixPath) -> str:
+    result = download_images(page, filename)
+    result = cleanup(result)
+    return result
+
+
+def download_images(page: Page, filename: str or PosixPath) -> BeautifulSoup:
+    '''
+    Download page attachments into subdir `IMG_DIR` near the filename,
+    replace all confluence image tags with classic <img> tags referencing
+    images in the `IMG_DIR` subdir.
+
+    :param page:     Page object to be processed
+    :param filename: path to current markdown file
+
+    :returns: string with page HTML source code, where images are referencing
+              files in the local IMG_DIR subfolder.
+    '''
+    def replace_image(filename):
+        title = match.group('title') or ''
+        filename = match.group('filename')
+        image_path = f'{IMG_DIR}/{filename}'
+        return f'<img src="{image_path}" alt="{title}">'
+
+    # pattern = re.compile(r'<ac:image(?:\s+ac:title="(?P<title>.+?)")?>\s*<ri:attachment\s+ri:filename="(?P<filename>.+?)"[\s\S]+?</ac:image>')
+    img_dir = Path(filename).parent / IMG_DIR
+    if not img_dir.exists():
+        img_dir.mkdir()
+    page.download_all_attachments(img_dir)
+    soup = BeautifulSoup(page.body, 'html.parser')
+    for img in soup.find_all(re.compile('ac:image')):
+        title = img.attrs.get('ac:title', '')
+        child = next(img.children)
+        if child.name == 'ri:attachment':
+            image_path = f'{IMG_DIR}/{child.attrs["ri:filename"]}'
+        elif child.name == 'ri:url':
+            image_path = child.attrs['ri:value']
+        else:
+            continue
+        tag = Tag(name='img', attrs={'alt': title, 'src': image_path})
+        img.replace_with(tag)
+    return soup
+
+
+def cleanup(source: BeautifulSoup) -> str:
+    result = unwrap_tags(source)
+    result = transform_tags(source)
+    result = remove_tags(source)
+    return str(result)
+
+
+def unwrap_tags(source: BeautifulSoup) -> str:
+    tags_to_unwrap = ['ac:inline-comment-marker', 'span']
+
+    for tag_name in tags_to_unwrap:
+        for tag in source.find_all(re.compile(tag_name)):
+            tag.unwrap()
+    return source
+
+
+def transform_tags(source: BeautifulSoup) -> str:
+    return source
+
+
+def remove_tags(source: BeautifulSoup) -> str:
+    '''
+    Remove all tags which start with "ac:" and their content from source.
+
+    :param source: string with HTML code to be cleaned up.
+
+    :returns: string with confluence tags removed.
+    '''
+    tags_to_remove = ['ac:.*']
+    for tag_name in tags_to_remove:
+        for tag in source.find_all(re.compile(tag_name)):
+            tag.decompose()
+    return source
 
 
 class Preprocessor(BasePreprocessorExt):
     defaults = {'cachedir': '.confluencecache',
-                'escapedir': 'escaped'}
-    tags = ('raw_confluence',)
+                'escapedir': 'escaped',
+                'pandoc_path': 'pandoc'}
+    tags = (ESCAPE_TAG, IMPORT_TAG)
 
     def _escape(self, match) -> str:
         contents = match.group('body')
@@ -18,17 +113,84 @@ class Preprocessor(BasePreprocessorExt):
             f.write(contents)
         return f"[confluence_escaped hash=%{filename}%]"
 
+    def _get_config(self, tag_options: dict) -> CombinedOptions:
+        '''
+        Get merged config from (decreasing priority):
+
+        - tag options,
+        - preprocessir options,
+        - backend options.
+        '''
+        def filter_uncommon(val: dict) -> dict:
+            uncommon_options = ['title', 'id']
+            return {k: v for k, v in val.items()
+                    if k not in uncommon_options}
+        backend_config = self.config.get('backend_config', {}).get('confluence', {})
+        options = CombinedOptions(
+            {
+                'tag': tag_options,
+                'config': filter_uncommon(self.options),
+                'backend_config': filter_uncommon(backend_config)
+            },
+            priority=['tag', 'config', 'backend_config'],
+            required=[('id',), ('title', 'space_key')]
+        )
+        return options
+
+    def _connect(self, host: str, login: str, password: str) -> Confluence:
+        """Connect to Confluence server and test connection"""
+        self.logger.debug(f'Trying to connect to confluence server at {host}')
+        host = host.rstrip('/')
+        self.con = Confluence(host, login, password)
+        try:
+            res = self.con.get('rest/api/space')
+        except UnicodeEncodeError:
+            raise RuntimeError('Sorry, non-ACSII passwords are not supported')
+        if isinstance(res, str) or 'statusCode' in res:
+            raise RuntimeError(f'Cannot connect to {host}:\n{res}')
+
+    def _import_from_confluence(self, match):
+        tag_options = self.get_options(match.group('options'))
+        config = self._get_config(tag_options)
+        self._connect(config['host'],
+                      config['login'],
+                      config['password'])
+        page = Page(self.con,
+                    config.get('space_key'),
+                    config.get('title'),
+                    None,
+                    config.get('id'))
+        body = process(page, self.current_filepath)
+        debug_filepath = Path(config['cachedir']) / DEBUG_FILENAME
+        with open(debug_filepath, 'w') as f:
+            f.write(body)
+        return self._convert_to_markdown(debug_filepath, config['pandoc_path'])
+
+    def _convert_to_markdown(self,
+                             source_path: str or PosixPath,
+                             pandoc_path: str = 'pandoc') -> str:
+        '''Convert HTML to Markdown with Pandoc'''
+        command = f'{pandoc_path} -f html -t gfm {source_path}'
+        self.logger.debug('Converting MD to HTML with Pandoc, command:\n' + command)
+        p = run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
+        return p.stdout.decode()
+
+    def process_tags(self, match) -> str:
+        if match.group('tag') == ESCAPE_TAG:
+            return self._escape(match)
+        elif match.group('tag') == IMPORT_TAG:
+            return self._import_from_confluence(match)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._escaped_dir = self.project_path / self.options['cachedir'] / self.options['escapedir']
-        shutil.rmtree(self._escaped_dir, ignore_errors=True)
-        self._escaped_dir.mkdir(parents=True)
+        self._escaped_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger = self.logger.getChild('confluence')
 
         self.logger.debug(f'Preprocessor inited: {self.__dict__}')
 
     def apply(self):
-        self._process_tags_for_all_files(self._escape)
+        self._process_tags_for_all_files(self.process_tags)
         self.logger.info(f'Preprocessor applied')

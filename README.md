@@ -202,3 +202,7 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla qua
 
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam cumque soluta sequi blanditiis, voluptatibus quaerat similique nihil debitis repellendus.
 ```
+
+# Confluence Preprocessor for Foliant
+
+Confluence preprocessor allows to insert page from Confluence server into your Foliant project. 

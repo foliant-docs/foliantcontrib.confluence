@@ -1,3 +1,7 @@
+# 0.6.9
+
+- Introducing import from confluence with `confluence` tag
+
 # 0.6.8
 
 - Now foliant-anchors are always added even for new pages
