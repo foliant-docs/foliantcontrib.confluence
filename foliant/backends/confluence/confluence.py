@@ -23,8 +23,6 @@ import atlassian.confluence
 atlassian.confluence.log = Mock()
 
 
-SINGLE_MODE = 'single'
-MULTIPLE_MODE = 'multiple'
 CACHEDIR_NAME = '.confluencecache'
 ATTACHMENTS_DIR_NAME = 'attachments'
 ESCAPE_DIR_NAME = 'escaped'
@@ -163,6 +161,9 @@ class Backend(BaseBackend):
         if config['toc']:
             new_content = add_toc(new_content)
 
+        with open(self._cachedir / 'before_comments.html', 'w') as f:
+            f.write(new_content)
+
         if config['restore_comments']:
             new_content = add_comments(page,
                                        new_content,
@@ -263,13 +264,13 @@ class Backend(BaseBackend):
         with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
             output('', self.quiet)  # empty line for better output
             try:
-                options = Options(self.options, required=['host'])
-                if "login" not in options:
-                    msg = f"Please input login for {options['host']}:\n"
+                self.options = Options(self.options, required=['host'])
+                if "login" not in self.options:
+                    msg = f"Please input login for {self.options['host']}:\n"
                     msg = '\n!!! User input required !!!\n' + msg
-                    options['login'] = input(msg)
-                if "password" not in options:
-                    msg = f"Please input password for {options['login']}:\n"
+                    self.options['login'] = input(msg)
+                if "password" not in self.options:
+                    msg = f"Please input password for {self.options['login']}:\n"
                     msg = '\n!!! User input required !!!\n' + msg
                     self.options['password'] = getpass(msg)
                 if target == 'confluence':

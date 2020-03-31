@@ -1,6 +1,7 @@
 # 0.6.9
 
-- Introducing import from confluence with `confluence` tag
+- Introducing import from confluence into Foliant with `confluence` tag
+- Fix: solved conflicts between inline comments and macros (including anchors)
 
 # 0.6.8
 

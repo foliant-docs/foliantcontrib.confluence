@@ -32,7 +32,8 @@ def restore_refs(old_content: str,
     new_strings = [s for s in new_bs.strings if s.strip()]
     old_strings = [s for s in old_bs.strings if s.strip()]
     places = find_place2(old_strings, new_strings, ref_dict)
-    equal, not_equal = correct_places(places)
+    correct_places(places, new_strings)
+    equal, not_equal = divide_places(places)
     restore_equal_refs(equal, new_strings)
     if not resolve_changed:
         insert_unequal_refs(not_equal, new_strings, resolved_ids)
@@ -258,12 +259,42 @@ def add_unique(a: list, b: list, at_beginning: bool = True) -> None:
                 a.append(i)
 
 
-def correct_places(places: list) -> dict:
+def correct_places(places: list, strings: list):
+    '''
+    Looks for strings which are inside confluence-tags <ac:... and removes such
+    strings from the links (we cannot add inline comments into macros).
+    In place.
+
+    :param places:  list of tuples, got from find_place2 function:
+                    [(info_dict, indeces, equal)]
+    :param strings: list of NavigableStrings from the new content, which are
+                    right now a part of the tree.
+    '''
+    logger.debug('correct_places START')
+    for place in places:
+        to_remove = []
+        for i in range(len(place[1])):
+            index = place[1][i]
+            cur = strings[index]
+            while cur:
+                if cur.name and cur.name.startswith('ac:'):
+                    logger.debug(f"string '{strings[index]}' is inside macro {cur.name}"
+                                 " and will be removed")
+                    to_remove.append(i)
+                    break
+                cur = cur.parent
+        for i in reversed(to_remove):
+            s = place[1].pop(i)
+            logger.debug(f"Removed string [{s}]: '{strings[s]}'")
+    logger.debug('correct_places END')
+
+
+def divide_places(places: list) -> dict:
     '''
     Takes a list of tuples, got from find_place2 function:
     [(info_dict, indeces, equal)]
 
-    Looks for the places with equal == True and gathers it into a separate list.
+    Looks for the places with equal == True and gathers them into a separate list.
     Removes all indeces which were mentioned in `equal` places from other places.
     Gathers references in the correct order from the remaining places and saves them
     in a dictionary with key = string index, value = list of ref_ids, which point
@@ -277,7 +308,7 @@ def correct_places(places: list) -> dict:
     - not_equal = {index: [ref_list]} : dictionary with references for strings
                 which are not equal.
     '''
-    logger.debug('correct_places START')
+    logger.debug('divide_places START')
 
     equal_places = [(info_dict, copy(indeces), equal)
                     for info_dict, indeces, equal in places if equal]
@@ -308,7 +339,7 @@ def correct_places(places: list) -> dict:
 
     logger.debug(f'Equal places:\n\n{pformat(equal_places)}\n\n'
                  f'References for changed strings:\n\n{pformat(unequal)}')
-    logger.debug('correct_places END')
+    logger.debug('divide_places END')
     return equal_places, unequal
 
 
@@ -393,7 +424,7 @@ def insert_unequal_refs(unequal: dict, new_strings: list, resolved_ids: list):
                          f'{[ref for ref in refs if ref in resolved_ids]}')
             refs = [ref for ref in refs if ref not in resolved_ids]
             if not refs:
-                logger.debug('All refs for the string were reseolved. Skipping')
+                logger.debug('All refs for the string were resolved. Skipping')
                 continue
 
         logger.debug(f'Refs to insert: {refs}')

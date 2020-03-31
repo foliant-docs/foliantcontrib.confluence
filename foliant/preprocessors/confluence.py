@@ -1,12 +1,13 @@
 import re
-import shutil
 from hashlib import md5
 from pathlib import Path, PosixPath
+from getpass import getpass
 from subprocess import run, PIPE, STDOUT
 
 from atlassian import Confluence
 from bs4 import BeautifulSoup, Tag
 
+from foliant.utils import output
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.preprocessors.utils.combined_options import CombinedOptions
 
@@ -37,13 +38,7 @@ def download_images(page: Page, filename: str or PosixPath) -> BeautifulSoup:
     :returns: string with page HTML source code, where images are referencing
               files in the local IMG_DIR subfolder.
     '''
-    def replace_image(filename):
-        title = match.group('title') or ''
-        filename = match.group('filename')
-        image_path = f'{IMG_DIR}/{filename}'
-        return f'<img src="{image_path}" alt="{title}">'
 
-    # pattern = re.compile(r'<ac:image(?:\s+ac:title="(?P<title>.+?)")?>\s*<ri:attachment\s+ri:filename="(?P<filename>.+?)"[\s\S]+?</ac:image>')
     img_dir = Path(filename).parent / IMG_DIR
     if not img_dir.exists():
         img_dir.mkdir()
@@ -113,7 +108,7 @@ class Preprocessor(BasePreprocessorExt):
             f.write(contents)
         return f"[confluence_escaped hash=%{filename}%]"
 
-    def _get_config(self, tag_options: dict) -> CombinedOptions:
+    def _get_config(self, tag_options: dict = {}) -> CombinedOptions:
         '''
         Get merged config from (decreasing priority):
 
@@ -133,7 +128,7 @@ class Preprocessor(BasePreprocessorExt):
                 'backend_config': filter_uncommon(backend_config)
             },
             priority=['tag', 'config', 'backend_config'],
-            required=[('id',), ('title', 'space_key')]
+            required=[('host', 'id',), ('host', 'title', 'space_key')]
         )
         return options
 
@@ -192,5 +187,23 @@ class Preprocessor(BasePreprocessorExt):
         self.logger.debug(f'Preprocessor inited: {self.__dict__}')
 
     def apply(self):
+        output('', self.quiet)  # empty line for better output
+        options = CombinedOptions(
+            {
+                'preprocessor': self.options,
+                'backend': self.config.get('backend_config', {}).get('confluence', {})
+            },
+            priority='preprocessor',
+            required=['host']
+        )
+        if "login" not in options:
+            msg = f"Please input login for {options['host']}:\n"
+            msg = '\n!!! User input required !!!\n' + msg
+            self.options['login'] = input(msg)
+        if "password" not in options:
+            msg = f"Please input password for {self.options['login']}:\n"
+            msg = '\n!!! User input required !!!\n' + msg
+            self.options['password'] = getpass(msg)
+
         self._process_tags_for_all_files(self.process_tags)
         self.logger.info(f'Preprocessor applied')
