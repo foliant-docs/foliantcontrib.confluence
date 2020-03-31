@@ -14,8 +14,6 @@ from foliant.preprocessors.utils.combined_options import CombinedOptions
 from foliant.backends.confluence.classes import Page
 
 
-ESCAPE_TAG = 'raw_confluence'
-IMPORT_TAG = 'confluence'
 IMG_DIR = '_confluence_attachments'
 DEBUG_FILENAME = 'import_debug.html'
 
@@ -97,16 +95,7 @@ class Preprocessor(BasePreprocessorExt):
     defaults = {'cachedir': '.confluencecache',
                 'escapedir': 'escaped',
                 'pandoc_path': 'pandoc'}
-    tags = (ESCAPE_TAG, IMPORT_TAG)
-
-    def _escape(self, match) -> str:
-        contents = match.group('body')
-        filename = md5(contents.encode()).hexdigest()
-        self.logger.debug(f'saving following escaped conluence code to hash {filename}:'
-                          f'\n{contents}')
-        with open(self._escaped_dir / filename, 'w') as f:
-            f.write(contents)
-        return f"[confluence_escaped hash=%{filename}%]"
+    tags = ('confluence',)
 
     def _get_config(self, tag_options: dict = {}) -> CombinedOptions:
         '''
@@ -170,17 +159,8 @@ class Preprocessor(BasePreprocessorExt):
         p = run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
         return p.stdout.decode()
 
-    def process_tags(self, match) -> str:
-        if match.group('tag') == ESCAPE_TAG:
-            return self._escape(match)
-        elif match.group('tag') == IMPORT_TAG:
-            return self._import_from_confluence(match)
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self._escaped_dir = self.project_path / self.options['cachedir'] / self.options['escapedir']
-        self._escaped_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger = self.logger.getChild('confluence')
 
@@ -205,5 +185,5 @@ class Preprocessor(BasePreprocessorExt):
             msg = '\n!!! User input required !!!\n' + msg
             self.options['password'] = getpass(msg)
 
-        self._process_tags_for_all_files(self.process_tags)
+        self._process_tags_for_all_files(self._import_from_confluence)
         self.logger.info(f'Preprocessor applied')

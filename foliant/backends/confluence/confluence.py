@@ -52,8 +52,8 @@ class Backend(BaseBackend):
 
     targets = ('confluence')
 
-    required_preprocessors_after = [{'confluence': {'cachedir': CACHEDIR_NAME,
-                                                    'escapedir': ESCAPE_DIR_NAME}}]
+    required_preprocessors_after = [{'confluence_final': {'cachedir': CACHEDIR_NAME,
+                                                          'escapedir': ESCAPE_DIR_NAME}}]
 
     defaults = {'mode': 'single',
                 'toc': False,
