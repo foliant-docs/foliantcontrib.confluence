@@ -247,7 +247,7 @@ backend_config:
 `collapse`
 :   Collapse code blocks into a clickable bar. Default: `false`
 
-Right now Foliant only converts code blocks by backticks\tildes (tabbed code blocks are ignored for now):
+Right now Foliant only converts code blocks by backticks/tildes (tabbed code blocks are ignored for now):
 
 ~~~
 This code block will be converted:
@@ -266,7 +266,7 @@ def test3():
 ~~~
 ```
 
-Syntax name, defined after backticks\tildes is converted into its Confluence counterpart. Right now following syntaxes are supported:
+Syntax name, defined after backticks/tildes is converted into its Confluence counterpart. Right now following syntaxes are supported:
 
 * `actionscript`,
 * `applescript`,
