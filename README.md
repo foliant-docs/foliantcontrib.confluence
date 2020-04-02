@@ -31,7 +31,7 @@ https://my_confluence_server.org/pages/viewpage.action?pageId=123 (Page Title)
 
 ## Config
 
-You have to set up correct config for this backend to work properly.
+You have to set up the correct config for this backend to work properly.
 
 Specify all options in `backend_config.confluence` section:
 
@@ -60,10 +60,10 @@ backend_config:
 :   **Required** Host of your confluence server.
 
 `login`
-:   Login of the user who has permissions to create and update pages. If login is not supplied, it will be prompted during build.
+:   Login of the user who has permissions to create and update pages. If login is not supplied, it will be prompted during the build.
 
 `password`
-:   Password of the user. If password is not supplied, it will be prompted during build.
+:   Password of the user. If the password is not supplied, it will be prompted during the build.
 
 `id`
 :   ID of the page where the content will be uploaded. *Only for already existing pages*
@@ -80,7 +80,7 @@ backend_config:
 :   ID of the parent page under which the new one(s) should be created. *Only for not yet existing pages*.
 
 `parent_title`
-:   Another way to define parent of the page. Lower priority than `paren_di`. Title of the parent page under which the new one(s) should be created. Parent should exist under the space_key specified. *Only for not yet existing pages*.
+:   Another way to define the parent of the page. Lower priority than `paren_di`. Title of the parent page under which the new one(s) should be created. The parent should exist under the space_key specified. *Only for not yet existing pages*.
 
 `test_run`
 :   If this option is true, Foliant will prepare the files for uploading to Confluence, but won't actually upload them. Use this option for testing your content before upload. The prepared files can be found in `.confluencecache/debug` folder. Default: `false`
@@ -89,13 +89,13 @@ backend_config:
 :   If `true` — watchers will be notified that the page has changed. Default: `false`
 
 `toc`
-:   Set to `true` to add table of contents to the beginning of the document. Default: `false`
+:   Set to `true` to add a table of contents to the beginning of the document. Default: `false`
 
 `restore_comments`
 :   Attempt to restore inline comments near the same places after updating the page. Default: `true`
 
 `resolve_if_changed`
-:   Delete inline comment from the source if the commented text was changed. This will automatically mark comment as resolved. Default: `false`
+:   Delete inline comment from the source if the commented text was changed. This will automatically mark the comment as resolved. Default: `false`
 
 `pandoc_path`
 :   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
@@ -103,11 +103,11 @@ backend_config:
 `codeblocks`
 :   Configuration for converting Markdown code blocks into code-block macros. See details in **Code blocks processing** sections.
 
-# User's guide
+## User's guide
 
-## Uploading articles
+### Uploading articles
 
-By default if you specify `id` or `space_key` and `title` in foliant.yml, the whole project will be built and uploaded to this page.
+By default, if you specify `id` or `space_key` and `title` in foliant.yml, the whole project will be built and uploaded to this page.
 
 If you wish to upload separate chapters into separate articles, you need to specify the respective `id` or `space_key` and `title` in *meta section* of the chapter.
 
@@ -135,11 +135,11 @@ You chapter md-content
 ```
 
 > **Important notice!**
-> Both modes work together. If you specify the `id1` in foliant.yml and `id2` in chapter's meta — the whole project will be uploaded to the page with `id1`, and the specific chapter will also be uploaded to page with `id2`.
+> Both modes work together. If you specify the `id1` in foliant.yml and `id2` in chapter's meta — the whole project will be uploaded to the page with `id1`, and the specific chapter will also be uploaded to the page with `id2`.
 
-## Creating pages
+### Creating pages
 
-If you want a new page to be created for content in your Foliant project, just supply in foliant.yml the space key and a title which does not yet exist in this space. Remember that in Confluence page titles are unique inside one space. If you use a title of an already existing page, the backend will attempt to edit it and replace its content with your project.
+If you want a new page to be created for content in your Foliant project, just supply in foliant.yml the space key and a title that does not yet exist in this space. Remember that in Confluence page titles are unique inside one space. If you use a title of an already existing page, the backend will attempt to edit it and replace its content with your project.
 
 Example config for this situation is:
 
@@ -157,9 +157,9 @@ Now if you change the title in your config, confluence will *create a new page w
 
 If you want to change the title of your page, the answer is in the following section.
 
-## Updating pages
+### Updating pages
 
-Generally to update the page contents you may use the same config you used to create it (see previous section). If the page with specified title exists, it will be updated.
+Generally to update the page contents you may use the same config you used to create it (see the previous section). If the page with a specified title exists, it will be updated.
 
 Also, you can just specify the id of an existing page. After build its contents will be updated.
 
@@ -184,7 +184,7 @@ backend_config:
     title: New unique title
 ```
 
-## Updating part of a page
+### Updating part of a page
 
 Confluence backend can also upload an article into the middle of a Confluence page, leaving all the rest of it intact. To do this you need to add an *Anchor* into your page in the place where you want Foliant content to appear.
 
@@ -196,11 +196,11 @@ Confluence backend can also upload an article into the middle of a Confluence pa
 
 Now if you upload content into this page (see two previous sections), Confluence backend will leave all text which was before and after the anchor intact, and add your Foliant content in the middle.
 
-You can also add two anchors: `foliant_start` and `foliant_end`. In this case all text between these anchors will be replaced by your Foliant content.
+You can also add two anchors: `foliant_start` and `foliant_end`. In this case, all text between these anchors will be replaced by your Foliant content.
 
-## Inserting raw confluence tags
+### Inserting raw confluence tags
 
-If you want to supplement your page with confluence macros or any other storage-specific html, you may do it by wrapping them in the `<raw_confluence></raw_confluence>` tag.
+If you want to supplement your page with confluence macros or any other storage-specific HTML, you may do it by wrapping them in the `<raw_confluence></raw_confluence>` tag.
 
 For example, if you wish to add a table of contents into the middle of the document for some reason, you can do something like this:
 
@@ -212,9 +212,9 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla qua
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam cumque soluta sequi blanditiis, voluptatibus quaerat similique nihil debitis repellendus.
 ```
 
-## Code blocks processing
+### Code blocks processing
 
-Since 0.6.8 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearence by specifying some options in `codeblocks` config section of Confluence backend
+Since 0.6.8 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearance by specifying some options in `codeblocks` config section of Confluence backend
 
 ```yaml
 backend_config:
@@ -245,7 +245,7 @@ backend_config:
 :   Show line numbers in code blocks. Default: `false`
 
 `collapse`
-:   Collapse code blocks into clickable bar. Default: `false`
+:   Collapse code blocks into a clickable bar. Default: `false`
 
 Foliant converts both code blocks, defined by four spaces, and by backticks\tildes:
 
@@ -297,6 +297,74 @@ Syntax name, defined after backticks\tildes is converted into its Confluence cou
 * `xml`,
 * `yaml`.
 
+## Credits
+
+The following wonderful tools and libraries are used in foliantcontrib.confluence:
+
+- [Atlassian Python API wrapper](https://github.com/atlassian-api/atlassian-python-api),
+- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/),
+- [PyParsing](https://github.com/pyparsing/pyparsing).
+
 # Confluence Preprocessor for Foliant
 
-Confluence preprocessor allows to insert page from Confluence server into your Foliant project. 
+Confluence preprocessor allows inserting content from Confluence server into your Foliant project.
+
+## Installation
+
+```bash
+$ pip install foliantcontrib.confluence
+```
+
+## Config
+
+To enable the preprocessor, add `confluence` to `preprocessors` section in the project config:
+
+```yaml
+preprocessors:
+    - confluence
+```
+
+The preprocessor has a number of options:
+
+```yaml
+preprocessors:
+    - confluence:
+        host: https://my_confluence_server.org
+        login: user
+        password: user_password
+        space_key: "~user"
+        pandoc_path: pandoc
+```
+
+`host`
+:   **Required** Host of your confluence server. If not stated — it would be taken from Confluence backend config.
+
+`login`
+:   Login of the user who has permissions to create and update pages. If login is not supplied, it would be taken from backend config, or prompted during the build.
+
+`password`
+:   Password of the user. If password is not supplied, it would be taken from backend config, or prompted during the build.
+
+`space_key`
+:   The space key where the page titles will be searched for.
+
+`pandoc_path`
+:   Path to Pandoc executable (Pandoc is used to convert Confluence content into Markdown).
+
+## Usage
+
+Add a `<confluence></confluence>` tag at the position in the document where the content from Confluence should be inserted. The page is defined by its `id` or `title`. If you are specifying page by title, you will also need to set `space_key` either in tag or in the preprocessor options.
+
+```html
+The following content is imported from Confluence:
+
+<confluence id="12345"></confluence>
+
+This is from Confluence too, but determined by page title (space key is defined in preprocessor config):
+
+<confluence title="My Page"></confluence>
+
+Here we are overriding space_key:
+
+<confluence space_key="ANOTHER_SPACE" title="My Page"></confluence>
+```
