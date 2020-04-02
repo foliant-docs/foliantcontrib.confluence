@@ -230,13 +230,13 @@ backend_config:
 `theme`
 :   Color theme of the code blocks. Should be one of:
 
-* 'emacs',
-* 'django',
-* 'fadetogrey',
-* 'midnight',
-* 'rdark',
-* 'eclipse',
-* 'confluence'.
+* `emacs`,
+* `django`,
+* `fadetogrey`,
+* `midnight`,
+* `rdark`,
+* `eclipse`,
+* `confluence`.
 
 `title`
 :   Title of the code block.
