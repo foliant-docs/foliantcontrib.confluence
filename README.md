@@ -214,7 +214,7 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam c
 
 ### Code blocks processing
 
-Since 0.6.8 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearance by specifying some options in `codeblocks` config section of Confluence backend
+Since 0.6.9 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearance by specifying some options in `codeblocks` config section of Confluence backend
 
 ```yaml
 backend_config:
@@ -250,21 +250,23 @@ backend_config:
 Foliant converts both code blocks, defined by four spaces, and by backticks\tildes:
 
 ```html
-
 This code block will be converted:
 
     def test1():
         pass
+```
 
 And this:
-
+~~~
 ```python
 def test2():
     pass
  ```
+~~~
 
 And this:
 
+```
 ~~~
 def test3():
     pass
