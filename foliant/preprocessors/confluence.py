@@ -1,5 +1,6 @@
+'''Preprocessor which imports content from Confluence on place of <confluence> tags'''
+
 import re
-from hashlib import md5
 from pathlib import Path, PosixPath
 from getpass import getpass
 from subprocess import run, PIPE, STDOUT
@@ -12,7 +13,6 @@ from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.preprocessors.utils.combined_options import CombinedOptions
 
 from foliant.backends.confluence.classes import Page
-
 
 IMG_DIR = '_confluence_attachments'
 DEBUG_FILENAME = 'import_debug.html'
@@ -92,9 +92,7 @@ def remove_tags(source: BeautifulSoup) -> str:
 
 
 class Preprocessor(BasePreprocessorExt):
-    defaults = {'cachedir': '.confluencecache',
-                'escapedir': 'escaped',
-                'pandoc_path': 'pandoc'}
+    defaults = {'pandoc_path': 'pandoc', 'cachedir': '.confluencecache'}
     tags = ('confluence',)
 
     def _get_config(self, tag_options: dict = {}) -> CombinedOptions:

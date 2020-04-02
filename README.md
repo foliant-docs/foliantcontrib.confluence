@@ -46,11 +46,14 @@ backend_config:
     space_key: "~user"
     parent_id: 124442
     parent_title: Parent
+    test_run: false
     notify_watchers: false
     toc: false
     restore_comments: true
     resolve_if_changed: false
     pandoc_path: pandoc
+    codeblocks:
+        ...
 ```
 
 `host`
@@ -79,6 +82,9 @@ backend_config:
 `parent_title`
 :   Another way to define parent of the page. Lower priority than `paren_di`. Title of the parent page under which the new one(s) should be created. Parent should exist under the space_key specified. *Only for not yet existing pages*.
 
+`test_run`
+:   If this option is true, Foliant will prepare the files for uploading to Confluence, but won't actually upload them. Use this option for testing your content before upload. The prepared files can be found in `.confluencecache/debug` folder. Default: `false`
+
 `notify_watchers`
 :   If `true` — watchers will be notified that the page has changed. Default: `false`
 
@@ -93,6 +99,9 @@ backend_config:
 
 `pandoc_path`
 :   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
+
+`codeblocks`
+:   Configuration for converting Markdown code blocks into code-block macros. See details in **Code blocks processing** sections.
 
 # User's guide
 
@@ -202,6 +211,91 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla qua
 
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam cumque soluta sequi blanditiis, voluptatibus quaerat similique nihil debitis repellendus.
 ```
+
+## Code blocks processing
+
+Since 0.6.8 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearence by specifying some options in `codeblocks` config section of Confluence backend
+
+```yaml
+backend_config:
+    confluence:
+        codeblocks:  # all are optional
+            theme: django
+            title: Code example
+            linenumbers: false
+            collapse: false
+```
+
+
+`theme`
+:   Color theme of the code blocks. Should be one of:
+
+* 'emacs',
+* 'django',
+* 'fadetogrey',
+* 'midnight',
+* 'rdark',
+* 'eclipse',
+* 'confluence'.
+
+`title`
+:   Title of the code block.
+
+`linenumbers`
+:   Show line numbers in code blocks. Default: `false`
+
+`collapse`
+:   Collapse code blocks into clickable bar. Default: `false`
+
+Foliant converts both code blocks, defined by four spaces, and by backticks\tildes:
+
+```html
+
+This code block will be converted:
+
+    def test1():
+        pass
+
+And this:
+
+```python
+def test2():
+    pass
+ ```
+
+And this:
+
+~~~
+def test3():
+    pass
+~~~
+```
+
+Syntax name, defined after backticks\tildes is converted into its Confluence counterpart. Right now following syntaxes are supported:
+
+* `actionscript`,
+* `applescript`,
+* `bash`,
+* `c`,
+* `c`,
+* `coldfusion`,
+* `cpp`,
+* `cs`,
+* `css`,
+* `delphi`,
+* `diff`,
+* `erlang`,
+* `groovy`,
+* `html`,
+* `java`,
+* `javascript`,
+* `js`,
+* `perl`,
+* `php`,
+* `powershell`,
+* `python`,
+* `xml`,
+* `yaml`.
 
 # Confluence Preprocessor for Foliant
 

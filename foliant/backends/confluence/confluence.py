@@ -52,15 +52,23 @@ class Backend(BaseBackend):
 
     targets = ('confluence')
 
-    required_preprocessors_after = [{'confluence_final': {'cachedir': CACHEDIR_NAME,
-                                                          'escapedir': ESCAPE_DIR_NAME}}]
+    required_preprocessors_after = [
+        'unescapecode',
+        {
+            'confluence_final': {
+                'cachedir': CACHEDIR_NAME,
+                'escapedir': ESCAPE_DIR_NAME
+            }
+        }
+    ]
 
     defaults = {'mode': 'single',
                 'toc': False,
                 'pandoc_path': 'pandoc',
                 'restore_comments': True,
                 'resolve_if_changed': False,
-                'notify_watchers': False}
+                'notify_watchers': False,
+                'test_run': False}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -87,7 +95,7 @@ class Backend(BaseBackend):
         _, _, files = next(os.walk(self._cachedir))
         for file in files:
             new_name = unique_name(self._debug_dir, file)
-            shutil.copy(self._cachedir / file, self._debug_dir / new_name)
+            shutil.move(self._cachedir / file, self._debug_dir / new_name)
 
     def _get_options(self, *configs) -> Options:
         '''
@@ -150,18 +158,21 @@ class Backend(BaseBackend):
 
         self.logger.debug('Converting HTML to Confluence storage format')
         new_content = editor_to_storage(self.con, new_content)
+        with open(self._cachedir / '2_storage.html', 'w') as f:
+            f.write(new_content)
         new_content, attachments = process_images(new_content,
                                                   Path(filename).parent,
                                                   self._attachments_dir)
-        update_attachments(page,
-                           attachments,
-                           self._cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
+        if not config['test_run']:
+            update_attachments(page,
+                               attachments,
+                               self._cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
         new_content = confluence_unescape(new_content, self._cachedir / ESCAPE_DIR_NAME)
 
         if config['toc']:
             new_content = add_toc(new_content)
 
-        with open(self._cachedir / 'before_comments.html', 'w') as f:
+        with open(self._cachedir / '3_unescaped_with_images.html', 'w') as f:
             f.write(new_content)
 
         if config['restore_comments']:
@@ -170,21 +181,26 @@ class Backend(BaseBackend):
                                        config['resolve_if_changed'])
 
         need_update = page.need_update(new_content, title)
+        with open(self._cachedir / '4_to_upload.html', 'w') as f:
+            f.write(new_content)
         if need_update:
-            with open(self._cachedir / 'to_upload.html', 'w') as f:
-                f.write(new_content)
             self.logger.debug('Ready to upload. Content saved for debugging to '
                               f'{self._cachedir / "to_upload.html"}')
             minor_edit = not config['notify_watchers']
-            page.upload_content(new_content, title, minor_edit)
+            if not config['test_run']:
+                page.upload_content(new_content, title, minor_edit)
         else:
             self.logger.debug(f'Page with id {page.id} and title "{page.title}"'
                               " hadn't changed. Skipping.")
 
         self.backup_debug_info()
 
-        return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
-            .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
+        if config['test_run']:
+            return 'TEST RUN ' + ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
+                .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
+        else:
+            return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
+                .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
 
     def _build(self):
         '''
@@ -245,7 +261,7 @@ class Backend(BaseBackend):
             try:
                 options = self._get_options(common_options, section.data['confluence'])
             except Exception as e:
-                output(f'Skipping section {section}, wrong params: {e}', self.quiet)
+                # output(f'Skipping section {section}, wrong params: {e}', self.quiet)
                 self.logger.debug(f'Skipping section {section}, wrong params: {e}')
                 continue
             self.logger.debug(f'Building {section.chapter.filename}: {section.title}')

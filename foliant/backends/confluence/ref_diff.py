@@ -27,6 +27,9 @@ def restore_refs(old_content: str,
 
     old_bs = BeautifulSoup(old_content, 'html.parser')
     new_bs = BeautifulSoup(new_content, 'html.parser')
+    if is_empty(new_bs):
+        logger.debug('New content is empty, all inline comments will be omitted.')
+        return new_content
     remove_outline_resolved(old_bs)
     ref_dict = generate_ref_dict(old_bs)
     new_strings = [s for s in new_bs.strings if s.strip()]
@@ -38,6 +41,14 @@ def restore_refs(old_content: str,
     if not resolve_changed:
         insert_unequal_refs(not_equal, new_strings, resolved_ids)
     return str(new_bs)
+
+
+def is_empty(soup):
+    '''Check whether `soup` is an empty page (whitespaces ignored)'''
+    for s in soup.strings:
+        if s.strip():
+            return False
+    return True
 
 
 def remove_outline_resolved(bs: BeautifulSoup):

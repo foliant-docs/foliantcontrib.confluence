@@ -2,6 +2,10 @@
 
 - Introducing import from confluence into Foliant with `confluence` tag
 - Fix: solved conflicts between inline comments and macros (including anchors)
+- Fix: backend crashed if new page content was empty
+- Markdown code blocks are now converted into code-block macros
+- Markdown task lists are now converted into task-list macros
+- New `test_run` option
 
 # 0.6.8
 

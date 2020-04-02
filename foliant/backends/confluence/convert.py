@@ -44,8 +44,8 @@ def md_to_editor(source: str, temp_dir: PosixPath, pandoc_path: str = 'pandoc'):
         pandoc_path — custom path to pandoc binary.
         """
 
-        md_source = temp_dir / 'to_convert.md'
-        converted = temp_dir / 'converted.html'
+        md_source = temp_dir / '0_markdown.md'
+        converted = temp_dir / '1_editor.html'
         with open(md_source, 'w') as f:
             f.write(source)
         command = f'{pandoc_path} {md_source} -f markdown -t html -o {converted}'
