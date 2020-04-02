@@ -82,8 +82,8 @@ def process_code_blocks(content: str, config: dict, chapter=None) -> str:
     logger.debug('Processing fence blocks')
     result = FENCE_BLOCKS_RE.sub(sub_block, result)
 
-    logger.debug('Processing pre blocks')
-    result = PRE_BLOCKS_RE.sub(sub_block, result)
+    # logger.debug('Processing pre blocks')
+    # result = PRE_BLOCKS_RE.sub(sub_block, result)
     return result
 
 

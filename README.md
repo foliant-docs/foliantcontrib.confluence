@@ -247,26 +247,19 @@ backend_config:
 `collapse`
 :   Collapse code blocks into a clickable bar. Default: `false`
 
-Foliant converts both code blocks, defined by four spaces, and by backticks\tildes:
+Right now Foliant only converts code blocks by backticks\tildes (tabbed code blocks are ignored for now):
 
-```html
+~~~
 This code block will be converted:
 
-    def test1():
-        pass
-```
-
-And this:
-~~~
 ```python
 def test2():
     pass
  ```
 ~~~
 
-And this:
-
 ```
+And this:
 ~~~
 def test3():
     pass

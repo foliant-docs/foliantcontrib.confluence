@@ -1,3 +1,7 @@
+# 0.6.10
+
+- Disabled tabbed code blocks conversion because of conflicts.
+
 # 0.6.9
 
 - Introducing import from confluence into Foliant with `confluence` tag
