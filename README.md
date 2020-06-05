@@ -2,6 +2,8 @@
 
 # Confluence backend for Foliant
 
+![Confluence page built with Foliant](img/confluence.png)
+
 Confluence backend generates confluence articles and uploads them on your confluence server. It can create and edit pages in Confluence with content based on your Foliant project.
 
 It also has a feature of restoring the user inline comments, added for the article, even after the commented fragment was changed.
@@ -14,7 +16,7 @@ This backend adds the `confluence` target for your Foliant `make` command.
 $ pip install foliantcontrib.confluence
 ```
 
-> The backend requires [Pandoc](https://pandoc.org/) to be installed in your system. Pandoc is needed to convert Markdown into HTML.
+> The backend requires [Pandoc](https://pandoc.org/) to be installed on your system. Pandoc is needed to convert Markdown into HTML.
 
 ## Usage
 
