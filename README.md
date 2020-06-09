@@ -2,7 +2,7 @@
 
 # Confluence backend for Foliant
 
-![Confluence page built with Foliant](img/confluence.png)
+![Confluence page built with Foliant](https://raw.githubusercontent.com/foliant-docs/foliantcontrib.confluence/master/img/confluence.png)
 
 Confluence backend generates confluence articles and uploads them on your confluence server. It can create and edit pages in Confluence with content based on your Foliant project.
 
