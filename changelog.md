@@ -1,3 +1,7 @@
+# 0.6.11
+
+- Fix: XML error in code block conversion.
+
 # 0.6.10
 
 - Disabled tabbed code blocks conversion because of conflicts.

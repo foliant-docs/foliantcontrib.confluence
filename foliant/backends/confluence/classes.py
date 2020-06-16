@@ -1,10 +1,13 @@
 import os
+from logging import getLogger
 from pathlib import PosixPath, Path
 from urllib.parse import urlparse
 from atlassian import Confluence
 from bs4 import BeautifulSoup
 
 from .extracter import extract
+
+logger = getLogger('flt.confluence.classes')
 
 
 class PageNotAssignedError(Exception):
@@ -241,6 +244,13 @@ class Page:
                                             title=title or self.title,
                                             minor_edit=minor_edit)
         else:
+            logger
+            logger.debug(f'''create_page(type='page',
+                                         title={title or self.title},
+                                         space={self._space},
+                                         body={body[:100]}...,
+                                         parent_id={self.parent_id},
+                                         representation='storage')' ''')
             content = self._con.create_page(type='page',
                                             title=title or self.title,
                                             space=self._space,

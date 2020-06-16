@@ -123,7 +123,7 @@ def gen_code_macro(source: str,
         result += '  <ac:parameter ac:name="linenumbers">true</ac:parameter>\n'
     if collapse:
         result += '  <ac:parameter ac:name="collapse">true</ac:parameter>\n'
-    result += f'<ac:plain-text-body><![CDATA[{source}\n]]></ac:plain-text-body>\n</ac:structured-macro></raw_confluence>'
+    result += f'<ac:plain-text-body><![CDATA[{source}\n]]></ac:plain-text-body>\n</ac:structured-macro></p></raw_confluence>'
     return result
 
 
