@@ -1,5 +1,6 @@
 import shutil
 import os
+import yaml
 
 from pathlib import Path
 from getpass import getpass
@@ -68,7 +69,8 @@ class Backend(BaseBackend):
                 'restore_comments': True,
                 'resolve_if_changed': False,
                 'notify_watchers': False,
-                'test_run': False}
+                'test_run': False,
+                'passfile': 'confluence_secrets.yml'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -84,6 +86,7 @@ class Backend(BaseBackend):
         self._attachments_dir = self._cachedir / ATTACHMENTS_DIR_NAME
         config = self.config.get('backend_config', {}).get('confluence', {})
         self.options = {**self.defaults, **config}
+        self.options = Options(self.options, required=['host'])
 
         self.logger = self.logger.getChild('confluence')
 
@@ -202,14 +205,51 @@ class Backend(BaseBackend):
             return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
                 .format(host=config["host"].rstrip('/'), id=page.id, title=page.title)
 
+    def _get_credentials(self, host: str) -> tuple:
+        def get_password_for_login(login: str) -> str:
+            if 'password' in self.options:
+                return self.options['password']
+            else:
+                password = passdict.get(host, {}).get(login)
+                if password:
+                    return password
+                else:
+                    msg = '\n!!! User input required !!!\n'
+                    msg += f"Please input password for {login}:\n"
+                    return getpass(msg)
+        self.logger.debug(f'Loading passfile {self.options["passfile"]}')
+        if os.path.exists(self.options['passfile']):
+            self.logger.debug(f'Found passfile at {self.options["passfile"]}')
+            with open(self.options['passfile'], encoding='utf8') as f:
+                passdict = yaml.load(f, yaml.Loader)
+        else:
+            passdict = {}
+        if 'login' in self.options:
+            login = self.options['login']
+            password = get_password_for_login(login)
+        else:  # login not in self.options
+            host_dict = passdict.get(host, {})
+            if host_dict:
+                # getting first login from passdict
+                login = next(iter(host_dict.keys()))
+            else:
+                msg = '\n!!! User input required !!!\n'
+                msg += f"Please input login for {host}:\n"
+                login = input(msg)
+            password = get_password_for_login(login)
+        return login, password
+
     def _build(self):
         '''
         Main method. Builds confluence XHTML document from flat md source and
         uploads it into the confluence server.
         '''
-        self._connect(self.options['host'],
-                      self.options['login'],
-                      self.options['password'])
+        host = self.options['host']
+        credentials = self._get_credentials(host)
+        self.logger.debug(f'Got credentials for host {host}: login {credentials[0]}, '
+                          f'password {credentials[1]}')
+        self._connect(host,
+                      *credentials)
         result = []
         if 'id' in self.options or ('title' in self.options and 'space_key' in self.options):
             self.logger.debug('Uploading flat project to confluence')
@@ -280,19 +320,10 @@ class Backend(BaseBackend):
         with spinner(f'Making {target}', self.logger, self.quiet, self.debug):
             output('', self.quiet)  # empty line for better output
             try:
-                self.options = Options(self.options, required=['host'])
-                if "login" not in self.options:
-                    msg = f"Please input login for {self.options['host']}:\n"
-                    msg = '\n!!! User input required !!!\n' + msg
-                    self.options['login'] = input(msg)
-                if "password" not in self.options:
-                    msg = f"Please input password for {self.options['login']}:\n"
-                    msg = '\n!!! User input required !!!\n' + msg
-                    self.options['password'] = getpass(msg)
                 if target == 'confluence':
                     return self._build()
                 else:
                     raise ValueError(f'Confluence cannot make {target}')
 
             except Exception as exception:
-                raise type(exception)(f'Build failed: {exception}')
+                raise RuntimeError(f'Build failed: {exception}')

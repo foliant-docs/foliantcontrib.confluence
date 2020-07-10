@@ -1,6 +1,8 @@
 '''Preprocessor which imports content from Confluence on place of <confluence> tags'''
 
+import os
 import re
+import yaml
 from pathlib import Path, PosixPath
 from getpass import getpass
 from subprocess import run, PIPE, STDOUT
@@ -92,7 +94,11 @@ def remove_tags(source: BeautifulSoup) -> str:
 
 
 class Preprocessor(BasePreprocessorExt):
-    defaults = {'pandoc_path': 'pandoc', 'cachedir': '.confluencecache'}
+    defaults = {
+        'pandoc_path': 'pandoc',
+        'cachedir': '.confluencecache',
+        'passfile': 'confluence_secrets.yml'
+    }
     tags = ('confluence',)
 
     def _get_config(self, tag_options: dict = {}) -> CombinedOptions:
@@ -131,12 +137,49 @@ class Preprocessor(BasePreprocessorExt):
         if isinstance(res, str) or 'statusCode' in res:
             raise RuntimeError(f'Cannot connect to {host}:\n{res}')
 
+    def _get_credentials(self, host: str, config: CombinedOptions) -> tuple:
+        def get_password_for_login(login: str) -> str:
+            if 'password' in config:
+                return config['password']
+            else:
+                password = passdict.get(host, {}).get(login)
+                if password:
+                    return password
+                else:
+                    msg = '\n!!! User input required !!!\n'
+                    msg += f"Please input password for {login}:\n"
+                    return getpass(msg)
+        self.logger.debug(f'Loading passfile {config["passfile"]}')
+        if os.path.exists(config['passfile']):
+            self.logger.debug(f'Found passfile at {config["passfile"]}')
+            with open(config['passfile'], encoding='utf8') as f:
+                passdict = yaml.load(f, yaml.Loader)
+        else:
+            passdict = {}
+        if 'login' in config:
+            login = config['login']
+            password = get_password_for_login(login)
+        else:  # login not in self.options
+            host_dict = passdict.get(host, {})
+            if host_dict:
+                # getting first login from passdict
+                login = next(iter(host_dict.keys()))
+            else:
+                msg = '\n!!! User input required !!!\n'
+                msg += f"Please input login for {host}:\n"
+                login = input(msg)
+            password = get_password_for_login(login)
+        return login, password
+
     def _import_from_confluence(self, match):
         tag_options = self.get_options(match.group('options'))
         config = self._get_config(tag_options)
-        self._connect(config['host'],
-                      config['login'],
-                      config['password'])
+        host = config['host']
+        credentials = self._get_credentials(host, config)
+        self.logger.debug(f'Got credentials for host {host}: login {credentials[0]}, '
+                          f'password {credentials[1]}')
+        self._connect(host,
+                      *credentials)
         page = Page(self.con,
                     config.get('space_key'),
                     config.get('title'),
@@ -174,14 +217,6 @@ class Preprocessor(BasePreprocessorExt):
             priority='preprocessor',
             required=['host']
         )
-        if "login" not in options:
-            msg = f"Please input login for {options['host']}:\n"
-            msg = '\n!!! User input required !!!\n' + msg
-            self.options['login'] = input(msg)
-        if "password" not in options:
-            msg = f"Please input password for {self.options['login']}:\n"
-            msg = '\n!!! User input required !!!\n' + msg
-            self.options['password'] = getpass(msg)
 
         self._process_tags_for_all_files(self._import_from_confluence)
         self.logger.info(f'Preprocessor applied')

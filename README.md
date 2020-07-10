@@ -40,6 +40,7 @@ Specify all options in `backend_config.confluence` section:
 ```yaml
 backend_config:
   confluence:
+    passfile: confluence_secrets.yml
     host: 'https://my_confluence_server.org'
     login: user
     password: user_password
@@ -57,6 +58,9 @@ backend_config:
     codeblocks:
         ...
 ```
+
+`passfile`
+:   Path to YAML-file holding credentials. See details in **Supplying Credentials** section. Default: `confluence_secrets.yml`
 
 `host`
 :   **Required** Host of your confluence server.
@@ -294,13 +298,72 @@ Syntax name, defined after backticks/tildes is converted into its Confluence cou
 * `xml`,
 * `yaml`.
 
+### Supplying Credentials
+
+There are two ways to supply credentials for your confluence server.
+
+**1. In foliant.yml**
+
+The most basic way is just to put credentials in foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        login: user
+        password: pass
+```
+
+It's not very secure because foliant.yml is usually visible to everybody in your project's git repository.
+
+**2. Using passfile**
+
+Alternatively, you can use a passfile. *Passfile* is a yaml-file which holds all your passwords. You can keep it out from git-repository by storing it only on your local machine and production server.
+
+To use passfile, add a `passfile` option to foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        passfile: confluence_secrets.yaml
+```
+
+The syntax of the passfile is the following:
+
+```yaml
+hostname:
+    login: password
+```
+
+For example:
+
+```yaml
+https://my_confluence_server.org:
+    user1: wFwG34uK
+    user2: MEUeU3b4
+https://another_confluence_server.org:
+    admin: adminpass
+```
+
+If there are several records for a specified host in passfile (like in the example above), Foliant will pick the first one. If you want specific one of them, add the login parameter to your foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        passfile: confluence_secrets.yaml
+        login: user2
+```
+
 ## Credits
 
 The following wonderful tools and libraries are used in foliantcontrib.confluence:
 
 - [Atlassian Python API wrapper](https://github.com/atlassian-api/atlassian-python-api),
 - [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/),
-- [PyParsing](https://github.com/pyparsing/pyparsing).
+- [PyParsing](https://github.com/pyparsing/pyparsing),
+- [Pandoc](https://pandoc.org/).
 
 # Confluence Preprocessor for Foliant
 
@@ -326,12 +389,16 @@ The preprocessor has a number of options:
 ```yaml
 preprocessors:
     - confluence:
+        passfile: confluence_secrets.yml
         host: https://my_confluence_server.org
         login: user
         password: user_password
         space_key: "~user"
         pandoc_path: pandoc
 ```
+
+`passfile`
+:   Path to YAML-file holding credentials. See details in **Supplying Credentials** section. Default: `confluence_secrets.yml`
 
 `host`
 :   **Required** Host of your confluence server. If not stated — it would be taken from Confluence backend config.
@@ -364,4 +431,62 @@ This is from Confluence too, but determined by page title (space key is defined 
 Here we are overriding space_key:
 
 <confluence space_key="ANOTHER_SPACE" title="My Page"></confluence>
+```
+
+### Supplying Credentials
+
+There are two ways to supply credentials for your confluence server.
+
+**1. In foliant.yml**
+
+The most basic way is just to put credentials in foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        login: user
+        password: pass
+```
+
+It's not very secure because foliant.yml is usually visible to everybody in your project's git repository.
+
+**2. Using passfile**
+
+Alternatively, you can use a passfile. *Passfile* is a yaml-file which holds all your passwords. You can keep it out from git-repository by storing it only on your local machine and production server.
+
+To use passfile, add a `passfile` option to foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        passfile: confluence_secrets.yaml
+```
+
+The syntax of the passfile is the following:
+
+```yaml
+hostname:
+    login: password
+```
+
+For example:
+
+```yaml
+https://my_confluence_server.org:
+    user1: wFwG34uK
+    user2: MEUeU3b4
+https://another_confluence_server.org:
+    admin: adminpass
+```
+
+If there are several records for a specified host in passfile (like in the example above), Foliant will pick the first one. If you want specific one of them, add the login parameter to your foliant.yml:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        passfile: confluence_secrets.yaml
+        login: user2
 ```
