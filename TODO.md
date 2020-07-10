@@ -7,3 +7,5 @@ Add to docs that you can specify metadata in both tags and yfm and that yfm only
 
 debug the error:
  {'statusCode': 501, 'message': 'Unable to save changes to unreconciled page ContentId{id=39528577}. Refreshing the page should fix this.', 'reason': 'Not Implemented'}
+
+better error logging\printing. If error in html while converting — confluence sends detailed error message, should show it to user
