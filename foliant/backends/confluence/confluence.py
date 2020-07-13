@@ -15,7 +15,7 @@ from foliant.preprocessors.utils.combined_options import (Options, val_type)
 from .classes import Page
 from .convert import (md_to_editor, process_images, confluence_unescape,
                       editor_to_storage, add_comments, add_toc, set_up_logger,
-                      update_attachments, unique_name)
+                      update_attachments, unique_name, crop_title)
 
 # disabling confluence logger because it litters up output
 from unittest.mock import Mock
@@ -154,6 +154,8 @@ class Backend(BaseBackend):
                     parent_id,
                     config.get('id'))
 
+        if config.get('nohead'):
+            content = crop_title(content)
         new_content = md_to_editor(content, self._cachedir, config['pandoc_path'])
 
         self.logger.debug('Converting HTML to Confluence storage format')

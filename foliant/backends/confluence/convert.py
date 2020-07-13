@@ -14,6 +14,24 @@ from .ref_diff import restore_refs
 logger = None
 
 
+def crop_title(source: str) -> str:
+    """
+    Crop out the first title from the source if it starts with it.
+
+    :param source: source string to be processed.
+
+    :returns: source string with the first title removed
+    """
+    result = source.lstrip()
+    if re.match('^#{1,6} .+', result):  # starts with a title
+        if '\n' in result:
+            return result[result.index('\n') + 1:]
+        else:
+            return ''
+    else:
+        return source
+
+
 def fix_pandoc_images(source: str) -> str:
     def _sub_image(match):
         """

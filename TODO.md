@@ -1,4 +1,4 @@
-External file for storing passwords
+* External file for storing passwords
 Anchors don't work after adding "Section" (<ac:layout-section>)
 If hierarchy is created from scratch, test run fails because parent pages were not actually created. Find fallback
 If Title param not specified — use one from title: root param in foliant.yml or title of current section

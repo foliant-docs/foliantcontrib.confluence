@@ -51,6 +51,7 @@ backend_config:
     test_run: false
     notify_watchers: false
     toc: false
+    nohead: false
     restore_comments: true
     resolve_if_changed: false
     pandoc_path: pandoc
@@ -92,6 +93,9 @@ backend_config:
 
 `toc`
 :   Set to `true` to add a table of contents to the beginning of the document. Default: `false`
+
+`nohead`
+:   If set to `true`, first title will be removed from the page. Use it if you are experiencing duplicate titles. Default: `false`
 
 `restore_comments`
 :   Attempt to restore inline comments near the same places after updating the page. Default: `true`

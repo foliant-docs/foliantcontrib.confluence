@@ -58,7 +58,7 @@ class Preprocessor(BasePreprocessorExt):
     def apply(self):
         self._process_all_files(
             self._process_content,
-            log_msg="Processing code blocks"
+            log_msg="Processing formatting structures"
         )
         self._process_tags_for_all_files(
             self._escape,
