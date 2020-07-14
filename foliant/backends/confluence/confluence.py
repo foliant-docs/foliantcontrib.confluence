@@ -6,6 +6,7 @@ from pathlib import Path
 from getpass import getpass
 
 from atlassian import Confluence
+from requests.exceptions import HTTPError
 
 from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
@@ -282,7 +283,11 @@ class Backend(BaseBackend):
                 options = self._get_options(self.options)
 
                 self.logger.debug(f'Options: {options}')
-            result.append(self._upload(options, md_source, self._flat_src_file_path))
+            try:
+                result.append(self._upload(options, md_source, self._flat_src_file_path))
+            except HTTPError as e:
+                # reraising HTTPError with meaningful message
+                raise HTTPError(e.response.text, e.response)
 
         self.logger.debug('Searching metadata for confluence properties')
 
@@ -312,7 +317,11 @@ class Backend(BaseBackend):
 
             self.logger.debug(f'Options: {options}')
             original_file = self.project_path / section.chapter.filename
-            result.append(self._upload(options, md_source, original_file))
+            try:
+                result.append(self._upload(options, md_source, original_file))
+            except HTTPError as e:
+                # reraising HTTPError with meaningful message
+                raise HTTPError(e.response.text, e.response)
         if result:
             return '\n' + '\n'.join(result)
         else:

@@ -1,3 +1,9 @@
+# 0.6.12
+
+- New: option to store passwords in passfile.
+- New: nohead option to crop first title from the page.
+- Fix: better error reporting after updated atlassian-python-api package
+
 # 0.6.11
 
 - Fix: XML error in code block conversion.

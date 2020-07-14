@@ -49,35 +49,35 @@ def fix_pandoc_images(source: str) -> str:
 
 
 def md_to_editor(source: str, temp_dir: PosixPath, pandoc_path: str = 'pandoc'):
-        """
-        Convert md source string to HTML with Pandoc, fix pandoc image tags,
-        for confluence doesn't understand <figure> and <figcaption> tags.
+    """
+    Convert md source string to HTML with Pandoc, fix pandoc image tags,
+    for confluence doesn't understand <figure> and <figcaption> tags.
 
-        Return the resulting HTML string.
+    Return the resulting HTML string.
 
-        Parameters:
+    Parameters:
 
-        source — md-source to be converted;
-        temp_dir — directory for temporary files;
-        pandoc_path — custom path to pandoc binary.
-        """
+    source — md-source to be converted;
+    temp_dir — directory for temporary files;
+    pandoc_path — custom path to pandoc binary.
+    """
 
-        md_source = temp_dir / '0_markdown.md'
-        converted = temp_dir / '1_editor.html'
-        with open(md_source, 'w') as f:
-            f.write(source)
-        command = f'{pandoc_path} {md_source} -f markdown -t html -o {converted}'
+    md_source = temp_dir / '0_markdown.md'
+    converted = temp_dir / '1_editor.html'
+    with open(md_source, 'w') as f:
+        f.write(source)
+    command = f'{pandoc_path} {md_source} -f markdown -t html -o {converted}'
 
-        logger.debug('Converting MD to HTML with Pandoc, command:\n' + command)
-        run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
+    logger.debug('Converting MD to HTML with Pandoc, command:\n' + command)
+    run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
 
-        with open(converted) as f:
-            result = f.read()
+    with open(converted) as f:
+        result = f.read()
 
-        logger.debug('Fixing pandoc image captions.')
+    logger.debug('Fixing pandoc image captions.')
 
-        result = fix_pandoc_images(result)
-        return result
+    result = fix_pandoc_images(result)
+    return result
 
 
 def unique_name(dest_dir: str or PosixPath, old_name: str) -> str:
