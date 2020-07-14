@@ -246,6 +246,8 @@ Now if you upload content into this page (see two previous sections), Confluence
 
 You can also add two anchors: `foliant_start` and `foliant_end`. In this case, all text between these anchors will be replaced by your Foliant content.
 
+> **Known issue:** right now this mode doesn't work with *layout sections*. If you are using sections, whole content will be overwritten.
+
 ### Inserting raw confluence tags
 
 If you want to supplement your page with confluence macros or any other storage-specific HTML, you may do it by wrapping them in the `<raw_confluence></raw_confluence>` tag.
