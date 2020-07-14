@@ -78,7 +78,7 @@ backend_config:
 `title`
 :   Title of the page to be created or updated.
 
-> Remember that page titles in the space have to be unique.
+> Remember that page titles in one space must be unique.
 
 `space_key`
 :   The space key where the page(s) will be created/edited. *Only for not yet existing pages*.
@@ -132,6 +132,19 @@ field2: value
 Your chapter md-content
 ```
 
+or like this:
+
+```html
+<meta
+    field="value"
+    field2="value">
+</meta>
+
+Your chapter md-content
+```
+
+> The result of the above examples will be exactly the same. Just remember that first syntax, with three dashes --- will only work if it is in the beginning of the document. For all other cases use the meta-tag syntax.
+
 If you want to upload a chapter into confluence, add its properties under the `confluence` key like this:
 
 ```yaml
@@ -146,6 +159,31 @@ You chapter md-content
 
 > **Important notice!**
 > Both modes work together. If you specify the `id1` in foliant.yml and `id2` in chapter's meta — the whole project will be uploaded to the page with `id1`, and the specific chapter will also be uploaded to the page with `id2`.
+
+> **Notice**
+> You can omit `title` param in metadata. In this case section heading will be used as a title.
+
+
+If you want to upload just a part of the chapter, specify meta tag under the heading, which you want to upload, like this:
+
+```html
+# My document
+
+Lorem ipsum dolor sit amet, consectetur adipisicing elit. Explicabo quod omnis ipsam necessitatibus, enim voluptatibus.
+
+## Components
+
+<meta
+    confluence="
+        title='System components'
+        space_key='~user'
+    "
+
+Lorem ipsum dolor sit amet, consectetur adipisicing elit. Vel, atque!
+...
+```
+
+In this example, only the **Components** section with all its content will be uploaded to Confluence. The **My document** heading will be ignored.
 
 ### Creating pages
 

@@ -2,7 +2,8 @@
 
 - New: option to store passwords in passfile.
 - New: nohead option to crop first title from the page.
-- Fix: better error reporting after updated atlassian-python-api package
+- Fix: better error reporting after updated atlassian-python-api package.
+- New: if you specified only `space_key` param in metadata and no `title`, section heading will be used as title.
 
 # 0.6.11
 

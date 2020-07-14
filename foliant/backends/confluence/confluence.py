@@ -101,7 +101,7 @@ class Backend(BaseBackend):
             new_name = unique_name(self._debug_dir, file)
             shutil.move(self._cachedir / file, self._debug_dir / new_name)
 
-    def _get_options(self, *configs) -> Options:
+    def _get_options(self, *configs, fallback_title=None) -> Options:
         '''
         Get a list of dictionaries, all of which will be merged in one and
         transfered to an Options object with necessary checks.
@@ -109,6 +109,8 @@ class Backend(BaseBackend):
         Returns the resulting Options object.
         '''
         options = {}
+        if fallback_title:
+            options['title'] = fallback_title
         for config in configs:
             options.update(config)
         options = Options(options,
@@ -122,7 +124,7 @@ class Backend(BaseBackend):
                                       'pandoc_path': val_type(str),
                                       },
                           required=[('id',),
-                                    ('title', 'space_key')])
+                                    ('space_key', 'title')])
         return options
 
     def _connect(self, host: str, login: str, password: str) -> Confluence:
@@ -295,8 +297,7 @@ class Backend(BaseBackend):
         meta = load_meta(chapters, self.working_dir)
         for section in meta.iter_sections():
 
-            if 'confluence' not in section.data or \
-                    not isinstance(section.data['confluence'], dict):
+            if not isinstance(section.data.get('confluence'), dict):
                 self.logger.debug(f'No "confluence" section in {section}), skipping.')
                 continue
 
@@ -306,7 +307,9 @@ class Backend(BaseBackend):
             common_options = {k: v for k, v in self.options.items()
                               if k not in uncommon_options}
             try:
-                options = self._get_options(common_options, section.data['confluence'])
+                options = self._get_options(common_options,
+                                            section.data['confluence'],
+                                            fallback_title=section.title)
             except Exception as e:
                 # output(f'Skipping section {section}, wrong params: {e}', self.quiet)
                 self.logger.debug(f'Skipping section {section}, wrong params: {e}')
