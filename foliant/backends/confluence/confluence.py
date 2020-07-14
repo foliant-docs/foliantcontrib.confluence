@@ -36,17 +36,20 @@ class BadParamsException(Exception):
     pass
 
 
-def get_content_id_by_title(con: Confluence, title: str, space_key: str):
+def get_content_id_by_title(con: Confluence,
+                            title: str,
+                            space_key: str,
+                            test_run: bool):
     if not space_key:
         raise BadParamsException('You have to add space_key if you specify '
-                                 'paret by title!')
-    try:
-        p = con.get_page_by_title(space_key, title)
-        if p and 'id' in p:
-            return p['id']
-    except:
-        pass
-    raise BadParamsException(f'Cannot find parent with title {title}')
+                                 'parent by title!')
+    p = con.get_page_by_title(space_key, title)
+    if p and 'id' in p:
+        return p['id']
+    elif test_run:
+        return None
+    else:
+        raise BadParamsException(f'Cannot find parent with title {title}')
 
 
 class Backend(BaseBackend):
@@ -150,9 +153,15 @@ class Backend(BaseBackend):
             if 'parent_id' in config:
                 parent_id = config['parent_id']
             elif 'parent_title' in config:
+                self.logger.debug(
+                    f'Trying to find parent id by space_key "{config.get("space_key")}"'
+                    f' and title "{config["parent_title"]}"'
+                )
                 parent_id = get_content_id_by_title(self.con,
                                                     config['parent_title'],
-                                                    config.get('space_key'))
+                                                    config.get('space_key'),
+                                                    config['test_run'])
+                self.logger.debug(f'Found parent id: {parent_id}')
 
         page = Page(self.con,
                     config.get('space_key'),
@@ -301,6 +310,7 @@ class Backend(BaseBackend):
                 self.logger.debug(f'No "confluence" section in {section}), skipping.')
                 continue
 
+            self.logger.debug(f'Found "confluence" section in {section}), preparing to build.')
             # getting common options from foliant.yml and merging them with meta fields
             common_options = {}
             uncommon_options = ['title', 'id', 'space_key', 'parent_id']

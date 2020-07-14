@@ -4,6 +4,7 @@
 - New: nohead option to crop first title from the page.
 - Fix: better error reporting after updated atlassian-python-api package.
 - New: if you specified only `space_key` param in metadata and no `title`, section heading will be used as title.
+- Fix: if hierarchy is created on the test run, missing parents by title are now ignored
 
 # 0.6.11
 
