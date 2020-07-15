@@ -1,6 +1,7 @@
-[![](https://img.shields.io/pypi/v/foliantcontrib.confluence.svg)](https://pypi.org/project/foliantcontrib.confluence/) [![](https://img.shields.io/github/v/tag/foliant-docs/foliantcontrib.confluence.svg?label=GitHub)](https://github.com/foliant-docs/foliantcontrib.confluence)
 
 # Confluence backend for Foliant
+
+[![](https://img.shields.io/pypi/v/foliantcontrib.confluence.svg)](https://pypi.org/project/foliantcontrib.confluence/) [![](https://img.shields.io/github/v/tag/foliant-docs/foliantcontrib.confluence.svg?label=GitHub)](https://github.com/foliant-docs/foliantcontrib.confluence)
 
 ![Confluence page built with Foliant](https://raw.githubusercontent.com/foliant-docs/foliantcontrib.confluence/master/img/confluence.png)
 
@@ -135,7 +136,7 @@ Your chapter md-content
 or like this:
 
 ```html
-<<meta
+<meta
     field="value"
     field2="value">
 </meta>
@@ -173,7 +174,7 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Explicabo quod omnis i
 
 ## Components
 
-<<meta
+<meta
     confluence="
         title='System components'
         space_key='~user'
@@ -466,15 +467,15 @@ Add a `<confluence></confluence>` tag at the position in the document where the 
 ```html
 The following content is imported from Confluence:
 
-<<confluence id="12345"></confluence>
+<confluence id="12345"></confluence>
 
 This is from Confluence too, but determined by page title (space key is defined in preprocessor config):
 
-<<confluence title="My Page"></confluence>
+<confluence title="My Page"></confluence>
 
 Here we are overriding space_key:
 
-<<confluence space_key="ANOTHER_SPACE" title="My Page"></confluence>
+<confluence space_key="ANOTHER_SPACE" title="My Page"></confluence>
 ```
 
 ### Supplying Credentials
