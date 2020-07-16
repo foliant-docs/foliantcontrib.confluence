@@ -178,7 +178,8 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Explicabo quod omnis i
     confluence="
         title='System components'
         space_key='~user'
-    "
+    ">
+</meta>
 
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Vel, atque!
 ...
@@ -411,6 +412,8 @@ The following wonderful tools and libraries are used in foliantcontrib.confluenc
 - [Pandoc](https://pandoc.org/).
 
 # Confluence Preprocessor for Foliant
+
+[![](https://img.shields.io/pypi/v/foliantcontrib.confluence.svg)](https://pypi.org/project/foliantcontrib.confluence/) [![](https://img.shields.io/github/v/tag/foliant-docs/foliantcontrib.confluence.svg?label=GitHub)](https://github.com/foliant-docs/foliantcontrib.confluence)
 
 Confluence preprocessor allows inserting content from Confluence server into your Foliant project.
 
