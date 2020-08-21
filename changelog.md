@@ -1,3 +1,7 @@
+# 0.6.13
+
+- Fix: cache dir for preprocessor was not created
+
 # 0.6.12
 
 - New: option to store passwords in passfile.

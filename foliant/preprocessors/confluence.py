@@ -174,6 +174,9 @@ class Preprocessor(BasePreprocessorExt):
     def _import_from_confluence(self, match):
         tag_options = self.get_options(match.group('options'))
         config = self._get_config(tag_options)
+        cachedir = Path(config['cachedir'])
+        if not cachedir.exists():
+            cachedir.mkdir(parents=True)
         host = config['host']
         credentials = self._get_credentials(host, config)
         self.logger.debug(f'Got credentials for host {host}: login {credentials[0]}, '
@@ -186,7 +189,7 @@ class Preprocessor(BasePreprocessorExt):
                     None,
                     config.get('id'))
         body = process(page, self.current_filepath)
-        debug_filepath = Path(config['cachedir']) / DEBUG_FILENAME
+        debug_filepath = cachedir / DEBUG_FILENAME
         with open(debug_filepath, 'w') as f:
             f.write(body)
         return self._convert_to_markdown(debug_filepath, config['pandoc_path'])
@@ -209,14 +212,6 @@ class Preprocessor(BasePreprocessorExt):
 
     def apply(self):
         output('', self.quiet)  # empty line for better output
-        options = CombinedOptions(
-            {
-                'preprocessor': self.options,
-                'backend': self.config.get('backend_config', {}).get('confluence', {})
-            },
-            priority='preprocessor',
-            required=['host']
-        )
 
         self._process_tags_for_all_files(self._import_from_confluence)
         self.logger.info(f'Preprocessor applied')
