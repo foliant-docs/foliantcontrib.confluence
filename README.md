@@ -488,7 +488,7 @@ preprocessors:
         passfile: confluence_secrets.yml
         host: https://my_confluence_server.org
         login: user
-        password: user_password
+        password: !CONFLUENCE_PASS
         space_key: "~user"
         pandoc_path: pandoc
 ```
@@ -504,6 +504,8 @@ preprocessors:
 
 `password`
 :   Password of the user. If password is not supplied, it would be taken from backend config, or prompted during the build.
+
+> It is not secure to store plain text passwords in your config files. We recommend to use [environment variables](https://foliant-docs.github.io/docs/config/#env) to supply passwords
 
 `space_key`
 :   The space key where the page titles will be searched for.
