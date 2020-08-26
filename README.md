@@ -346,7 +346,7 @@ Syntax name, defined after backticks/tildes is converted into its Confluence cou
 
 ### Supplying Credentials
 
-There are two ways to supply credentials for your confluence server.
+There are several ways to supply credentials for your confluence server.
 
 **1. In foliant.yml**
 
@@ -362,9 +362,57 @@ backend_config:
 
 It's not very secure because foliant.yml is usually visible to everybody in your project's git repository.
 
-**2. Using passfile**
+**2. Omit credentials in config**
 
-Alternatively, you can use a passfile. *Passfile* is a yaml-file which holds all your passwords. You can keep it out from git-repository by storing it only on your local machine and production server.
+A slightly more secure way is to remove password or both login and password from config:
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        login: user
+```
+
+In this case Foliant will prompt for missing credentials during each build:
+
+```bash
+$ foliant make confluence
+Parsing config... Done
+Applying preprocessor confluence_final... Done
+Making confluence...
+
+!!! User input required !!!
+Please input password for user:
+$
+```
+
+**3. Using environment variables**
+
+Foliant 1.0.12 can access environment variables inside config files with `!env` modifier.
+
+```yaml
+backend_config:
+    confluence:
+        host: https://my_confluence_server.org
+        login: !env CONFLUENCE_USER
+        password: !env CONFLUENCE_PASS
+```
+
+Now you can add these variables into your command:
+
+```bash
+CONFLUENCE_USER=user CONFLUENCE_PASS=pass foliant make confluence
+```
+
+Or, if you are using docker:
+
+```bash
+docker-compose run --rm -e CONFLUENCE_USER=user -e CONFLUENCE_PASS=pass foliant make confluence
+```
+
+**4. Using passfile**
+
+Finally, you can use a passfile. *Passfile* is a yaml-file which holds all your passwords. You can keep it out from git-repository by storing it only on your local machine and production server.
 
 To use passfile, add a `passfile` option to foliant.yml:
 
