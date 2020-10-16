@@ -1,3 +1,7 @@
+# 0.6.14
+
+- Add code blocks processing for Confluence preprocessor.
+
 # 0.6.13
 
 - Fix: cache dir for preprocessor was not created

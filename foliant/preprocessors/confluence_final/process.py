@@ -42,7 +42,7 @@ SYNTAX_CONVERT = {
     'php': 'php',
     'perl': 'perl',
     'powershell': 'powershell',
-    'yaml': 'yaml'
+    'yaml': 'yml'
 }
 
 THEMES = ['emacs', 'django', 'fadetogrey', 'midnight', 'rdark', 'eclipse', 'confluence']

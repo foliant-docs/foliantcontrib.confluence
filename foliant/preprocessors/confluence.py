@@ -11,6 +11,7 @@ from atlassian import Confluence
 from bs4 import BeautifulSoup, Tag
 
 from foliant.utils import output
+from foliant.preprocessors.confluence_final.process import SYNTAX_CONVERT
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.preprocessors.utils.combined_options import CombinedOptions
 
@@ -60,12 +61,12 @@ def download_images(page: Page, filename: str or PosixPath) -> BeautifulSoup:
 
 def cleanup(source: BeautifulSoup) -> str:
     result = unwrap_tags(source)
-    result = transform_tags(source)
-    result = remove_tags(source)
+    result = transform_tags(result)
+    result = remove_tags(result)
     return str(result)
 
 
-def unwrap_tags(source: BeautifulSoup) -> str:
+def unwrap_tags(source: BeautifulSoup) -> BeautifulSoup:
     tags_to_unwrap = ['ac:inline-comment-marker', 'span']
 
     for tag_name in tags_to_unwrap:
@@ -74,11 +75,35 @@ def unwrap_tags(source: BeautifulSoup) -> str:
     return source
 
 
-def transform_tags(source: BeautifulSoup) -> str:
+def transform_tags(source: BeautifulSoup) -> BeautifulSoup:
+    result = transform_code_blocks(source)
+    return result
+
+
+def transform_code_blocks(source: BeautifulSoup) -> BeautifulSoup:
+    lang_dict = {v: k for k, v in SYNTAX_CONVERT.items()}
+
+    for tag in source.find_all(
+        re.compile('ac:structured-macro'),
+        attrs={'ac:name': "code"}
+    ):
+        lang = ''
+        body = ''
+        for child in tag.children:
+            if child.name == 'ac:parameter' and child.attrs['ac:name'] == 'language':
+                lang = lang_dict.get(child.text.lower(), '')
+            elif child.name == 'ac:plain-text-body':
+                body = child.text
+        if body:
+            new_tag = Tag(name='pre', attrs={'class': lang})
+            code = Tag(name='code')
+            code.insert(0, body)
+            new_tag.insert(0, code)
+            tag.replace_with(new_tag)
     return source
 
 
-def remove_tags(source: BeautifulSoup) -> str:
+def remove_tags(source: BeautifulSoup) -> BeautifulSoup:
     '''
     Remove all tags which start with "ac:" and their content from source.
 
@@ -199,7 +224,7 @@ class Preprocessor(BasePreprocessorExt):
                              pandoc_path: str = 'pandoc') -> str:
         '''Convert HTML to Markdown with Pandoc'''
         command = f'{pandoc_path} -f html -t gfm {source_path}'
-        self.logger.debug('Converting MD to HTML with Pandoc, command:\n' + command)
+        self.logger.debug('Converting HTML to MD with Pandoc, command:\n' + command)
         p = run(command, shell=True, check=True, stdout=PIPE, stderr=STDOUT)
         return p.stdout.decode()
 
