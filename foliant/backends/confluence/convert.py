@@ -2,13 +2,13 @@ import re
 import os
 import shutil
 
-from filecmp import cmp
 from pathlib import PosixPath, Path
 from subprocess import run, PIPE, STDOUT
 
 from atlassian import Confluence
+from bs4 import BeautifulSoup
 
-from .classes import Page
+from .wrapper import Page
 from .ref_diff import restore_refs
 
 logger = None
@@ -109,26 +109,28 @@ def process_images(source: str,
     new_source — a modified source with correct image paths
     """
 
-    def _sub(image):
-        image_caption = image.group('caption')
-        image_path = image.group('path')
+    def _sub(match):
+        image = BeautifulSoup(match.group(0), 'html.parser').find('img')
+        attrs = dict(image.attrs)
+        image_path = attrs.pop('src')
 
         # leave external images as is
         if image_path.startswith('http'):
-            return image.group(0)
+            return match.group(0)
 
         image_path = Path(rel_dir) / image_path
 
-        logger.debug(f'Found image: {image.group(0)}')
+        logger.debug(f'Found image: {image}')
 
         new_name = unique_name(target_dir, image_path.name)
         new_path = Path(target_dir) / new_name
 
-        logger.debug(f'Copying image into: {new_path}')
+        logger.debug(f'Copying image to: {new_path}')
         shutil.copy(image_path, new_path)
         attachments.append(new_path)
 
-        img_ref = f'<ac:image ac:title="{image_caption}"><ri:attachment ri:filename="{new_name}"/></ac:image>'
+        attrs = ' '.join(f'{k.replace("_", ":")}="{v}"' for k, v in attrs.items())
+        img_ref = f'<ac:image {attrs}><ri:attachment ri:filename="{new_name}"/></ac:image>'
 
         logger.debug(f'Converted image ref: {img_ref}')
         return img_ref
@@ -137,12 +139,51 @@ def process_images(source: str,
     shutil.rmtree(target_dir, ignore_errors=True)
     Path(target_dir).mkdir()
 
-    image_pattern = re.compile(r'<img src="(?P<path>.+?)" +(?:alt="(?P<caption>.*?)")?.+?>')
+    image_pattern = re.compile(r'<img(?:\s*[A-Za-z_:][0-9A-Za-z_:\-\.]*=".+?"\s*)+/?\s*>')
     attachments = []
 
     logger.debug('Processing images')
 
     return image_pattern.sub(_sub, source), attachments
+
+
+def post_process_ac_image(escaped_content, parent_filename, attachments_dir):
+    attachments = []
+    if not escaped_content.strip().startswith('<ac:image'):
+        return escaped_content, attachments
+
+    logger.debug(f'Parsing confluence image: {escaped_content}')
+    root = BeautifulSoup(escaped_content, 'html.parser')
+    ac_image = root.find('ac:image')
+    if not ac_image:
+        logger.debug(f'ac:image tag not found, returning content as is')
+        return escaped_content, attachments
+
+    ri_attachment = ac_image.find('ri:attachment')
+    if not ri_attachment:
+        logger.debug(f'ri:attachment tag not found, returning content as is')
+        return escaped_content, attachments
+
+    src = ri_attachment.get('ri:filename')
+    if not src:
+        logger.debug(f'ri:filename attribute is not present, returning content as is')
+        return escaped_content, attachments
+
+    src = Path(src)
+
+    if not src.exists():
+        logger.debug(f'{src} does not exist, returning content as is')
+        return escaped_content, attachments
+
+    new_name = unique_name(attachments_dir, src.name)
+    new_path = Path(attachments_dir) / new_name
+
+    logger.debug(f'Copying image to: {new_path}')
+    shutil.copy(src, new_path)
+    attachments.append(new_path)
+
+    ri_attachment.attrs['ri:filename'] = new_name
+    return str(root), attachments
 
 
 def confluence_unescape(source: str, escape_dir: str or PosixPath) -> str:
@@ -161,7 +202,7 @@ def confluence_unescape(source: str, escape_dir: str or PosixPath) -> str:
         filepath = Path(escape_dir) / filename
         with open(filepath) as f:
             return f.read()
-    pattern = re.compile("\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
+    pattern = re.compile(r"\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
     return pattern.sub(_sub, source)
 
 
@@ -213,38 +254,38 @@ def add_toc(source: str) -> str:
     return result
 
 
-def update_attachments(page: Page,
-                       attachments: list,
-                       cache_dir: PosixPath or str):
-    '''
-    Upload a list of attachments into page. Only changed attachments will
-    be updated. If page doesn't exist yet, an empty one will be created.
+# def update_attachments(page: Page,
+#                        attachments: list,
+#                        cache_dir: PosixPath or str):
+#     '''
+#     Upload a list of attachments into page. Only changed attachments will
+#     be updated. If page doesn't exist yet, an empty one will be created.
 
-    `page` — a Page object to which attachments will be uploaded.
-    `attachments` — a list of attachments PosixPaths.
-    `cache_dir` — temporary dir where old attachments will be downloaded to
-                  for comparison.
-    '''
-    if attachments:
-        # we can only upload attachments to existing page
-        if not page.exists:
-            logger.debug('Page does not exist. Creating an empty one '
-                         'to upload attachments')
-            page.create_empty_page()
-        cache_dir = Path(cache_dir)
-        shutil.rmtree(cache_dir, ignore_errors=True)
-        cache_dir.mkdir(exist_ok=True)
-        remote_dict = page.download_all_attachments(cache_dir)
-        for att in attachments:
-            if att.name in remote_dict:
-                att_id, att_path = remote_dict[att.name]
-                if cmp(att, att_path):  # attachment not changed
-                    logger.debug(f"Attachment {att.name} hadn't changed, skipping")
-                    continue
-            logger.debug(f"Attachment {att.name} CHANGED, reuploading")
-            # not sure if it's needed, we can update images without deleting
-            # page.delete_attachment(att_id)
-            page.upload_attachment(att)
+#     `page` — a Page object to which attachments will be uploaded.
+#     `attachments` — a list of attachments PosixPaths.
+#     `cache_dir` — temporary dir where old attachments will be downloaded to
+#                   for comparison.
+#     '''
+#     if attachments:
+#         # we can only upload attachments to existing page
+#         if not page.exists:
+#             logger.debug('Page does not exist. Creating an empty one '
+#                          'to upload attachments')
+#             page.create_empty_page()
+#         cache_dir = Path(cache_dir)
+#         shutil.rmtree(cache_dir, ignore_errors=True)
+#         cache_dir.mkdir(exist_ok=True)
+#         remote_dict = page.download_all_attachments(cache_dir)
+#         for att in attachments:
+#             if att.name in remote_dict:
+#                 att_id, att_path = remote_dict[att.name]
+#                 if cmp(att, att_path):  # attachment not changed
+#                     logger.debug(f"Attachment {att.name} hadn't changed, skipping")
+#                     continue
+#             logger.debug(f"Attachment {att.name} CHANGED, reuploading")
+#             # not sure if it's needed, we can update images without deleting
+#             # page.delete_attachment(att_id)
+#             page.upload_attachment(att)
 
 
 def set_up_logger(logger_):

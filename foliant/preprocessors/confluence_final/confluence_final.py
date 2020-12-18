@@ -9,16 +9,13 @@ from hashlib import md5
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.meta.generate import load_meta
 
-from .process import process_code_blocks, process_task_lists
-
-
-# global logger. After Peprocessor init will be overridden with preprocessor logger
+from .process import process_code_blocks, process_task_lists, convert_image
 
 
 class Preprocessor(BasePreprocessorExt):
     defaults = {'cachedir': '.confluencecache',
                 'escapedir': 'escaped'}
-    tags = ('raw_confluence',)
+    tags = ('raw_confluence', r'ac:\S+?')
 
     def _process_content(self, content: str) -> str:
         processed = self._process_code_blocks(content)
@@ -34,9 +31,14 @@ class Preprocessor(BasePreprocessorExt):
         return process_code_blocks(content, config, chapter)
 
     def _escape(self, match) -> str:
-        contents = match.group('body')
+        if match.group('tag') == 'raw_confluence':
+            contents = match.group('body')
+        else:
+            contents = match.group(0)
+            if match.group('tag') == 'ac:image' and 'ri:attachment' in match.group(0):
+                contents = convert_image(match.group(0), current_filepath=self.current_filepath)
         filename = md5(contents.encode()).hexdigest()
-        self.logger.debug(f'saving following escaped conluence code to hash {filename}:'
+        self.logger.debug(f'saving following escaped confluence code to hash {filename}:'
                           f'\n{contents}')
         with open(self._escaped_dir / filename, 'w') as f:
             f.write(contents)
@@ -62,6 +64,6 @@ class Preprocessor(BasePreprocessorExt):
         )
         self._process_tags_for_all_files(
             self._escape,
-            log_msg="processing raw_confluence tags"
+            log_msg="processing raw confluence tags"
         )
         self.logger.info(f'Preprocessor applied')

@@ -1,3 +1,9 @@
+# 0.6.15
+
+- New: \[experimental\] `raw_confluence` tags are now not necessary for `ac:...` tags, they are escaped automatically.
+- New: supply images with additional parameters using `ac:image` tag.
+- New: `verify_ssl` parameter.
+
 # 0.6.14
 
 - Add code blocks processing for Confluence preprocessor.

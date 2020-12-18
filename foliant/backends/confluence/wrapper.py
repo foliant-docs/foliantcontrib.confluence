@@ -1,4 +1,8 @@
+'''Wrapper module for a Confluence page'''
+
 import os
+import shutil
+from filecmp import cmp
 from logging import getLogger
 from pathlib import PosixPath, Path
 from urllib.parse import urlparse
@@ -7,7 +11,7 @@ from bs4 import BeautifulSoup
 
 from .extracter import extract
 
-logger = getLogger('flt.confluence.classes')
+logger = getLogger('flt.confluence.wrapper')
 
 
 class PageNotAssignedError(Exception):
@@ -27,8 +31,6 @@ class HTMLResponseError(Exception):
 
 
 class Page:
-    '''Wrapper class for a Confluence page'''
-
     def __init__(self,
                  connection: Confluence,
                  space: str or None = None,
@@ -206,6 +208,39 @@ class Page:
             raise RuntimeError(f'Cannot access page with id {self.parent_id}:'
                                f'\n{res}')
         return res
+
+    def update_attachments(self,
+                           attachments: list,
+                           cache_dir: PosixPath or str):
+        '''
+        Upload a list of attachments into page. Only changed attachments will
+        be updated. If page doesn't exist yet, an empty one will be created.
+
+        `page` — a Page object to which attachments will be uploaded.
+        `attachments` — a list of attachments PosixPaths.
+        `cache_dir` — temporary dir where old attachments will be downloaded to
+                      for comparison.
+        '''
+        if attachments:
+            # we can only upload attachments to existing page
+            if not self.exists:
+                logger.debug('Page does not exist. Creating an empty one '
+                             'to upload attachments')
+                self.create_empty_page()
+            cache_dir = Path(cache_dir)
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            cache_dir.mkdir(exist_ok=True)
+            remote_dict = self.download_all_attachments(cache_dir)
+            for att in attachments:
+                if att.name in remote_dict:
+                    att_id, att_path = remote_dict[att.name]
+                    if cmp(att, att_path):  # attachment not changed
+                        logger.debug(f"Attachment {att.name} hadn't changed, skipping")
+                        continue
+                logger.debug(f"Attachment {att.name} CHANGED, reuploading")
+                # not sure if it's needed, we can update images without deleting
+                # page.delete_attachment(att_id)
+                self.upload_attachment(att)
 
     def create_empty_page(self):
         '''Create an empty page'''

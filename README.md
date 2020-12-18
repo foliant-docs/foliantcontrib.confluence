@@ -57,6 +57,7 @@ backend_config:
     restore_comments: true
     resolve_if_changed: false
     pandoc_path: pandoc
+    verify_ssl: true
     codeblocks:
         ...
 ```
@@ -109,7 +110,10 @@ backend_config:
 :   Delete inline comment from the source if the commented text was changed. This will automatically mark the comment as resolved. Default: `false`
 
 `pandoc_path`
-:   Path to Pandoc executable (Pandoc is used to convert Markdown into HTML).
+:   Path to Pandoc binary (Pandoc is used to convert Markdown into HTML).
+
+`verify_ssl`
+:   If `false`, SSL verification will be turned off. Sometimes when dealing with Confluence servers in Intranets it's easier to turn this option off rather than fight with admins. Not recommended to turn off for public servers in production. Default: `true`
 
 `codeblocks`
 :   Configuration for converting Markdown code blocks into code-block macros. See details in **Code blocks processing** sections.
@@ -263,6 +267,38 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Odit dolorem nulla qua
 
 Lorem ipsum dolor sit amet, consectetur adipisicing elit. Officiis, laboriosam cumque soluta sequi blanditiis, voluptatibus quaerat similique nihil debitis repellendus.
 ```
+
+In version 0.6.15 we've added an experimental feature of automatically escaping `<ac:...></ac:...>` tags for you. So if you want to insert, say, an image with native Confluence tag `ac:image`, you don't have to wrap it in `raw_confluence` tag, but keep in mind following caveats:
+
+- singleton `ac:...` tags are not supported, so `<ac:emoticon ac:name="cross" />` will not work, you will have to provide the closing tag: `<ac:emoticon ac:name="cross"></ac:emoticon>`,
+- only `ac:...` tags are escaped right now, other confluence tags like `ri:...` or `at:...` are left as is. If these tags appear inside `ac:...` tag, it's ok. If otherwise, `ac:...` tag appears inside `at:...` or `ri:...` tag, everything will break.
+
+### Advanced images
+
+Confluence has an `ac:image` tag which allows you to transform and format your attached images:
+
+- resize,
+- set alignment,
+- add borders,
+- etc.
+
+Since version `0.6.15` you have access to all these features. Now instead of plain Markdown-image syntax you can use native Confluence image syntax. Add an `ac:image` tag as if you were editing page source in Confluence interface and use local relative path to the image as if you were inserting Markdown-image.
+
+For example, if you have an image defined like this:
+
+```
+![My image](img/picture.png)
+```
+
+and you want to resize it to 600px and align to center, replace it with following tag:
+
+```
+<ac:image ac:height="600" ac:align="center">
+<ri:attachment ri:filename="img/picture.png" />
+</ac:image>
+```
+
+Here's [a link to Confluence docs](https://confluence.atlassian.com/doc/confluence-storage-format-790796544.html#ConfluenceStorageFormat-Images) about `ac:image` tag and all possible options.
 
 ### Code blocks processing
 
@@ -491,6 +527,7 @@ preprocessors:
         password: !CONFLUENCE_PASS
         space_key: "~user"
         pandoc_path: pandoc
+        verify_ssl: true
 ```
 
 `passfile`
@@ -512,6 +549,9 @@ preprocessors:
 
 `pandoc_path`
 :   Path to Pandoc executable (Pandoc is used to convert Confluence content into Markdown).
+
+`verify_ssl`
+:   If `false`, SSL verification will be turned off. Sometimes when dealing with Confluence servers in Intranets it's easier to turn this option off rather than fight with admins. Not recommended to turn off for public servers in production. Default: `true`
 
 ## Usage
 

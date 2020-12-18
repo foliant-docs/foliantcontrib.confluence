@@ -1,9 +1,10 @@
 import re
 from logging import getLogger
+from pathlib import PosixPath
 
 from pyparsing import (CharsNotIn, Group, Literal, nums, oneOf, OneOrMore,
                        StringEnd, StringStart, Suppress, Word, ZeroOrMore)
-
+from bs4 import BeautifulSoup
 
 from foliant.preprocessors.utils.combined_options import CombinedOptions
 
@@ -212,3 +213,39 @@ class TaskList:
             result += task.to_string()
         result += '\n</ac:task-list>\n'
         return result
+
+
+def convert_image(tag: str, current_filepath: PosixPath) -> str:
+    '''
+    If ac:image tag references local image, make its path absolute.
+
+    :param tag: ac:image original tag
+    :param current_filepath: path to Markdown file where this tag was encountered.
+
+    :returns: modified ac:image tag with absolute path to the local image.
+    '''
+    logger.debug(f'Parsing confluence image: {tag}')
+    root = BeautifulSoup(tag, 'html.parser')
+    ac_image = root.find('ac:image')
+    if not ac_image:
+        logger.debug(f'ac:image tag not found, skipping image')
+        return tag
+
+    ri_attachment = ac_image.find('ri:attachment')
+    if not ri_attachment:
+        logger.debug(f'ri:attachment tag not found, skipping image')
+        return tag
+
+    rel_path = ri_attachment.get('ri:filename')
+    if not rel_path:
+        logger.debug(f'ri:filename attribute is not preset, skipping image')
+        return tag
+    src = (current_filepath.parent / rel_path).resolve()
+    if not src.exists():
+        logger.debug(f'{src} does not exist, returning content as is')
+        return tag
+    logger.debug(f'got local path to image: {src}')
+
+    ri_attachment['ri:filename'] = src
+
+    return str(root)

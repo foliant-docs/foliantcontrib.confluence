@@ -15,7 +15,7 @@ from foliant.preprocessors.confluence_final.process import SYNTAX_CONVERT
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.preprocessors.utils.combined_options import CombinedOptions
 
-from foliant.backends.confluence.classes import Page
+from foliant.backends.confluence.wrapper import Page
 
 IMG_DIR = '_confluence_attachments'
 DEBUG_FILENAME = 'import_debug.html'
@@ -122,6 +122,7 @@ class Preprocessor(BasePreprocessorExt):
     defaults = {
         'pandoc_path': 'pandoc',
         'cachedir': '.confluencecache',
+        'verify_ssl': True,
         'passfile': 'confluence_secrets.yml'
     }
     tags = ('confluence',)
@@ -150,11 +151,11 @@ class Preprocessor(BasePreprocessorExt):
         )
         return options
 
-    def _connect(self, host: str, login: str, password: str) -> Confluence:
+    def _connect(self, host: str, login: str, password: str, verify_ssl: bool) -> Confluence:
         """Connect to Confluence server and test connection"""
         self.logger.debug(f'Trying to connect to confluence server at {host}')
         host = host.rstrip('/')
-        self.con = Confluence(host, login, password)
+        self.con = Confluence(host, login, password, verify_ssl=verify_ssl)
         try:
             res = self.con.get('rest/api/space')
         except UnicodeEncodeError:
@@ -167,7 +168,7 @@ class Preprocessor(BasePreprocessorExt):
             if 'password' in config:
                 return config['password']
             else:
-                password = passdict.get(host, {}).get(login)
+                password = passdict.get(host.rstrip('/'), {}).get(login)
                 if password:
                     return password
                 else:
@@ -207,7 +208,8 @@ class Preprocessor(BasePreprocessorExt):
         self.logger.debug(f'Got credentials for host {host}: login {credentials[0]}, '
                           f'password {credentials[1]}')
         self._connect(host,
-                      *credentials)
+                      *credentials,
+                      config['verify_ssl'])
         page = Page(self.con,
                     config.get('space_key'),
                     config.get('title'),
