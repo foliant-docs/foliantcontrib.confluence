@@ -9,7 +9,8 @@ from hashlib import md5
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.meta.generate import load_meta
 
-from .process import process_code_blocks, process_task_lists, convert_image
+from .process import (process_code_blocks, process_task_lists, convert_image,
+                      convert_attachment)
 
 
 class Preprocessor(BasePreprocessorExt):
@@ -37,6 +38,9 @@ class Preprocessor(BasePreprocessorExt):
             contents = match.group(0)
             if match.group('tag') == 'ac:image' and 'ri:attachment' in match.group(0):
                 contents = convert_image(match.group(0), current_filepath=self.current_filepath)
+            elif match.group('tag') == 'ac:link' and 'ri:attachment' in match.group(0):
+                contents = convert_attachment(match.group(0), current_filepath=self.current_filepath)
+
         filename = md5(contents.encode()).hexdigest()
         self.logger.debug(f'saving following escaped confluence code to hash {filename}:'
                           f'\n{contents}')

@@ -58,6 +58,9 @@ backend_config:
     resolve_if_changed: false
     pandoc_path: pandoc
     verify_ssl: true
+    attachments:
+        - license.txt
+        - project.pdf
     codeblocks:
         ...
 ```
@@ -114,6 +117,9 @@ backend_config:
 
 `verify_ssl`
 :   If `false`, SSL verification will be turned off. Sometimes when dealing with Confluence servers in Intranets it's easier to turn this option off rather than fight with admins. Not recommended to turn off for public servers in production. Default: `true`
+
+`attachments`
+:   List of files (relative to project root) which should be attached to the Confluence page.
 
 `codeblocks`
 :   Configuration for converting Markdown code blocks into code-block macros. See details in **Code blocks processing** sections.
@@ -273,6 +279,24 @@ In version 0.6.15 we've added an experimental feature of automatically escaping 
 - singleton `ac:...` tags are not supported, so `<ac:emoticon ac:name="cross" />` will not work, you will have to provide the closing tag: `<ac:emoticon ac:name="cross"></ac:emoticon>`,
 - only `ac:...` tags are escaped right now, other confluence tags like `ri:...` or `at:...` are left as is. If these tags appear inside `ac:...` tag, it's ok. If otherwise, `ac:...` tag appears inside `at:...` or `ri:...` tag, everything will break.
 
+### Attaching files
+
+To attach an arbitrary file to Confluence page simply put path to this file in the `attachments` parameter in foliant.yml or in meta section.
+
+This will just tell Foliant to attach this file to the page, but if you want to reference it in text, use the other approach:
+
+Insert Confluence `ac:link` tag to attachment right inside your Markdown document and put local path to your file in the `ri:filename` parameter like this:
+
+```
+Presentation in PDF:
+
+<ac:link>
+  <ri:attachment ri:filename="presentation.pdf"/>
+</ac:link>
+```
+
+In this case Foliant will upload the `presentation.pdf` to the Confluence page and make a link to it in the text. The path in `ri:filename` parameter should be relative to current Markdown file, but you can use `!path`, `!project_path` modifiers to reference images relative to project root.
+
 ### Advanced images
 
 Confluence has an `ac:image` tag which allows you to transform and format your attached images:
@@ -297,6 +321,8 @@ and you want to resize it to 600px and align to center, replace it with followin
 <ri:attachment ri:filename="img/picture.png" />
 </ac:image>
 ```
+
+As you noticed, you should put path to your image right inside the `ri:filename` param. This path should be relative to current Markdown file, but you can (since 0.6.16) use `!path`, `!project_path` modifiers to reference images relative to project root.
 
 Here's [a link to Confluence docs](https://confluence.atlassian.com/doc/confluence-storage-format-790796544.html#ConfluenceStorageFormat-Images) about `ac:image` tag and all possible options.
 

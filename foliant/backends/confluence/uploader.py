@@ -7,6 +7,7 @@ from foliant.preprocessors.utils.combined_options import Options
 
 from .wrapper import Page
 from .convert import (md_to_editor, process_images, post_process_ac_image,
+                      post_process_ac_link,
                       editor_to_storage, add_comments, add_toc, set_up_logger,
                       unique_name, copy_with_unique_name, crop_title)
 from .constants import REMOTE_ATTACHMENTS_DIR_NAME, ESCAPE_DIR_NAME
@@ -14,6 +15,40 @@ from .constants import REMOTE_ATTACHMENTS_DIR_NAME, ESCAPE_DIR_NAME
 
 class BadParamsException(Exception):
     pass
+
+
+class AttachmentManager:
+    def __init__(
+        self,
+        store_dir: PosixPath,
+        logger
+    ):
+        self.dir = store_dir
+        self.logger = logger
+        self.registry = {}
+        self.cleanup()
+
+    def cleanup(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+        self.dir.mkdir()
+
+    def add_attachment(self, file_path: str or PosixPath) -> PosixPath or None:
+        abs_path = str(Path(file_path).resolve())
+        self.logger.debug(f'Adding attachment: {abs_path}')
+
+        if abs_path in self.registry:
+            self.logger.debug(f'Attachment found in registry, returning {self.registry[abs_path]}')
+            return self.registry[abs_path]
+        else:
+            new_path = copy_with_unique_name(self.dir, file_path)
+            if new_path:
+                self.registry[abs_path] = new_path
+            self.logger.debug(f'Copied to attachments dir, returning {new_path}')
+            return new_path  # may be None
+
+    @property
+    def attachments(self):
+        return list(self.registry.values())
 
 
 class PageUploader:
@@ -32,7 +67,7 @@ class PageUploader:
         self.con = con
         self.cachedir = cachedir
         self.debug_dir = debug_dir
-        self.attachments_dir = attachments_dir
+        self.attachment_manager = AttachmentManager(attachments_dir, logger)
         self.logger = logger
 
         self.page = None
@@ -57,23 +92,23 @@ class PageUploader:
         new_content = editor_to_storage(self.con, new_content)
         with open(self.cachedir / '2_storage.html', 'w') as f:
             f.write(new_content)
-        new_content, attachments = process_images(new_content,
-                                                  self.md_file_path.parent,
-                                                  self.attachments_dir)
+        new_content = process_images(new_content,
+                                     self.md_file_path.parent,
+                                     self.attachment_manager)
 
-        new_content, new_attachments = self.confluence_unescape(new_content)
-        attachments.extend(new_attachments)
+        new_content = self.confluence_unescape(new_content, self.attachment_manager)
+        # attachments.extend(new_attachments)
 
         for att in self.config.get('attachments', []):
-            att_path = copy_with_unique_name(self.attachments_dir, att)
+            att_path = self.attachment_manager.add_attachment(att)
             if not att_path:
                 self.logger.warning(f'Attachment {att} does not exist, skipping')
-            else:
-                attachments.append(att_path)
+            # else:
+            #     attachments.append(att_path)
 
         if not self.config['test_run']:
             self.page.update_attachments(
-                attachments,
+                self.attachment_manager.attachments,
                 self.cachedir / REMOTE_ATTACHMENTS_DIR_NAME
             )
 
@@ -126,7 +161,7 @@ class PageUploader:
                                                     self.config['test_run'])
                 self.logger.debug(f'Found parent id: {parent_id}')
 
-    def confluence_unescape(self, source: str) -> str:
+    def confluence_unescape(self, source: str, attachment_manager: AttachmentManager) -> str:
         '''
         Unescape bits of raw confluene code, escaped by confluence_final preprocessor.
 
@@ -141,23 +176,25 @@ class PageUploader:
             filepath = Path(escape_dir) / filename
             with open(filepath) as f:
                 escaped_content = f.read()
-                result, new_attachments = self.post_process_escaped_content(escaped_content)
-                attachments.extend(new_attachments)
+                result = self.post_process_escaped_content(escaped_content, attachment_manager)
+                # attachments.extend(new_attachments)
                 return result
-        attachments = []
+        # attachments = []
         escape_dir = self.cachedir / ESCAPE_DIR_NAME
         pattern = re.compile(r"\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
-        return pattern.sub(_sub, source), attachments
+        return pattern.sub(_sub, source)
 
-    def post_process_escaped_content(self, escaped_content: str):
+    def post_process_escaped_content(self, escaped_content: str, attachment_manager: AttachmentManager):
         if escaped_content.lstrip().startswith('<ac:image'):
-            result, attachments = post_process_ac_image(escaped_content, self.md_file_path, self.attachments_dir)
+            return post_process_ac_image(escaped_content, self.md_file_path, attachment_manager)
+
+        elif escaped_content.lstrip().startswith('<ac:link'):
+            return post_process_ac_link(escaped_content, self.md_file_path, attachment_manager)
             # if attachments and not self.config['test_run']:
             #     self.page.update_attachments(attachments,
             #                                  self.cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
-            return result, attachments
         else:
-            return escaped_content, []
+            return escaped_content
 
     def backup_debug_info(self):
         '''Copy debug files from the cachedir to debug dir'''

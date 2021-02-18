@@ -112,13 +112,14 @@ def copy_with_unique_name(dest_dir: str or PosixPath, file_path: str or PosixPat
 
 def process_images(source: str,
                    rel_dir: str or Path,
-                   target_dir: str or Path) -> str:
+                   attachment_manager) -> str:
     """
     Cleanup target_dir. Copy local images to `target_dir` with unique names, replace their HTML
     definitions in `source` with confluence definitions.
 
     `source` — string with HTML source code to search images in;
     `rel_dir` — path relative to which image paths are determined.
+    `attachment_manager` — AttachmentManager object.
 
     Returns a tuple: (new_source, attachments)
 
@@ -138,12 +139,12 @@ def process_images(source: str,
 
         logger.debug(f'Found image: {image}')
 
-        new_path = copy_with_unique_name(target_dir, image_path)
+        new_path = attachment_manager.add_attachment(image_path)
         if not new_path:
             logger.warning(f'Image {image_path} does not exist! Skipping')
             return match.group(0)
 
-        attachments.append(new_path)
+        # attachments.append(new_path)
 
         attrs = ' '.join(f'{k.replace("_", ":")}="{v}"' for k, v in attrs.items())
         img_ref = f'<ac:image {attrs}><ri:attachment ri:filename="{new_path.name}"/></ac:image>'
@@ -151,19 +152,19 @@ def process_images(source: str,
         logger.debug(f'Converted image ref: {img_ref}')
         return img_ref
 
-    # cleaning up target dir
-    shutil.rmtree(target_dir, ignore_errors=True)
-    Path(target_dir).mkdir()
+    # # cleaning up target dir
+    # shutil.rmtree(target_dir, ignore_errors=True)
+    # Path(target_dir).mkdir()
 
     image_pattern = re.compile(r'<img(?:\s*[A-Za-z_:][0-9A-Za-z_:\-\.]*=".+?"\s*)+/?\s*>')
-    attachments = []
+    # attachments = []
 
     logger.debug('Processing images')
 
-    return image_pattern.sub(_sub, source), attachments
+    return image_pattern.sub(_sub, source)  # , attachments
 
 
-def post_process_ac_image(escaped_content, parent_filename, attachments_dir):
+def post_process_ac_image(escaped_content, parent_filename, attachment_manager):
     attachments = []
     if not escaped_content.strip().startswith('<ac:image'):
         return escaped_content, attachments
@@ -191,15 +192,48 @@ def post_process_ac_image(escaped_content, parent_filename, attachments_dir):
         logger.debug(f'{src} does not exist, returning content as is')
         return escaped_content, attachments
 
-    new_path = copy_with_unique_name(attachments_dir, src)
-    if not new_path:
-        logger.warning(f'Image {src} does not exist, skipping')
-        return escaped_content
+    new_path = attachment_manager.add_attachment(src)
 
-    attachments.append(new_path)
+    # attachments.append(new_path)
 
     ri_attachment.attrs['ri:filename'] = new_path.name
-    return str(root), attachments
+    return str(root)
+
+
+def post_process_ac_link(escaped_content, parent_filename, attachment_manager):
+    attachments = []
+    if not escaped_content.strip().startswith('<ac:link'):
+        return escaped_content, attachments
+
+    logger.debug(f'Parsing confluence link: {escaped_content}')
+    root = BeautifulSoup(escaped_content, 'html.parser')
+    ac_link = root.find('ac:link')
+    if not ac_link:
+        logger.debug(f'ac:link tag not found, returning content as is')
+        return escaped_content, attachments
+
+    ri_attachment = ac_link.find('ri:attachment')
+    if not ri_attachment:
+        logger.debug(f'ri:attachment tag not found, returning content as is')
+        return escaped_content, attachments
+
+    src = ri_attachment.get('ri:filename')
+    if not src:
+        logger.debug(f'ri:filename attribute is not present, returning content as is')
+        return escaped_content, attachments
+
+    src = Path(src)
+
+    if not src.exists():
+        logger.debug(f'{src} does not exist, returning content as is')
+        return escaped_content, attachments
+
+    new_path = attachment_manager.add_attachment(src)
+
+    # attachments.append(new_path)
+
+    ri_attachment.attrs['ri:filename'] = new_path.name
+    return str(root)
 
 
 def confluence_unescape(source: str, escape_dir: str or PosixPath) -> str:
@@ -268,40 +302,6 @@ def add_toc(source: str) -> str:
     result = '<ac:structured-macro ac:macro-id="1" '\
         'ac:name="toc" ac:schema-version="1"/>\n' + source
     return result
-
-
-# def update_attachments(page: Page,
-#                        attachments: list,
-#                        cache_dir: PosixPath or str):
-#     '''
-#     Upload a list of attachments into page. Only changed attachments will
-#     be updated. If page doesn't exist yet, an empty one will be created.
-
-#     `page` — a Page object to which attachments will be uploaded.
-#     `attachments` — a list of attachments PosixPaths.
-#     `cache_dir` — temporary dir where old attachments will be downloaded to
-#                   for comparison.
-#     '''
-#     if attachments:
-#         # we can only upload attachments to existing page
-#         if not page.exists:
-#             logger.debug('Page does not exist. Creating an empty one '
-#                          'to upload attachments')
-#             page.create_empty_page()
-#         cache_dir = Path(cache_dir)
-#         shutil.rmtree(cache_dir, ignore_errors=True)
-#         cache_dir.mkdir(exist_ok=True)
-#         remote_dict = page.download_all_attachments(cache_dir)
-#         for att in attachments:
-#             if att.name in remote_dict:
-#                 att_id, att_path = remote_dict[att.name]
-#                 if cmp(att, att_path):  # attachment not changed
-#                     logger.debug(f"Attachment {att.name} hadn't changed, skipping")
-#                     continue
-#             logger.debug(f"Attachment {att.name} CHANGED, reuploading")
-#             # not sure if it's needed, we can update images without deleting
-#             # page.delete_attachment(att_id)
-#             page.upload_attachment(att)
 
 
 def set_up_logger(logger_):

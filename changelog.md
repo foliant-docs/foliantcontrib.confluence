@@ -1,3 +1,10 @@
+# 0.6.16
+
+- New: attaching arbitrary files with help of `attachments` parameter.
+- New: supply attachments implicitly using `ac:image` tag, without mentioning them in `attachments` parameter.
+- Attachments and images which were referenced several times on a page will now only be uploaded once.
+- Allow `!path`, `!project_path` modifiers inside `ac:attachment` param for `ac:link`, `ac:image`.
+
 # 0.6.15
 
 - New: \[experimental\] `raw_confluence` tags are now not necessary for `ac:...` tags, they are escaped automatically.

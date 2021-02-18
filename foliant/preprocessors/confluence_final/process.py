@@ -1,4 +1,5 @@
 import re
+import yaml
 from logging import getLogger
 from pathlib import PosixPath
 
@@ -236,7 +237,8 @@ def convert_image(tag: str, current_filepath: PosixPath) -> str:
         logger.debug(f'ri:attachment tag not found, skipping image')
         return tag
 
-    rel_path = ri_attachment.get('ri:filename')
+    # using yaml to allow !project_path !path tags
+    rel_path = yaml.load(ri_attachment.get('ri:filename'), yaml.Loader)
     if not rel_path:
         logger.debug(f'ri:filename attribute is not preset, skipping image')
         return tag
@@ -245,6 +247,43 @@ def convert_image(tag: str, current_filepath: PosixPath) -> str:
         logger.debug(f'{src} does not exist, returning content as is')
         return tag
     logger.debug(f'got local path to image: {src}')
+
+    ri_attachment['ri:filename'] = src
+
+    return str(root)
+
+
+def convert_attachment(tag: str, current_filepath: PosixPath) -> str:
+    '''
+    If ac:link tag references local attachment, make its path absolute.
+
+    :param tag: ac:link original tag
+    :param current_filepath: path to Markdown file where this tag was encountered.
+
+    :returns: modified ac:link tag with absolute path to the local image.
+    '''
+    logger.debug(f'Parsing confluence link to attachment: {tag}')
+    root = BeautifulSoup(tag, 'html.parser')
+    ac_link = root.find('ac:link')
+    if not ac_link:
+        logger.debug(f'ac:link tag not found, skipping')
+        return tag
+
+    ri_attachment = ac_link.find('ri:attachment')
+    if not ri_attachment:
+        logger.debug(f'ri:attachment tag not found, skipping')
+        return tag
+
+    # using yaml to allow !project_path !path tags
+    rel_path = yaml.load(ri_attachment.get('ri:filename'), yaml.Loader)
+    if not rel_path:
+        logger.debug(f'ri:filename attribute is not preset, skipping')
+        return tag
+    src = (current_filepath.parent / rel_path).resolve()
+    if not src.exists():
+        logger.debug(f'{src} does not exist, returning content as is')
+        return tag
+    logger.debug(f'got local path to attachment: {src}')
 
     ri_attachment['ri:filename'] = src
 
