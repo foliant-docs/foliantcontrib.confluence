@@ -94,6 +94,22 @@ def unique_name(dest_dir: str or PosixPath, old_name: str) -> str:
     return name
 
 
+def copy_with_unique_name(dest_dir: str or PosixPath, file_path: str or PosixPath) -> PosixPath:
+    """
+    Copy file_path file to dest_dir with unique name. Return path to copied file.
+    Returns None if file_path doesn't exist.
+    """
+    if not os.path.exists(file_path):
+        logger.debug(f'{file_path} does not exist, skipping')
+        return
+    new_name = unique_name(dest_dir, Path(file_path).name)
+    new_path = Path(dest_dir) / new_name
+
+    logger.debug(f'Copying file {file_path} to: {new_path}')
+    shutil.copy(file_path, new_path)
+    return new_path
+
+
 def process_images(source: str,
                    rel_dir: str or Path,
                    target_dir: str or Path) -> str:
@@ -122,15 +138,15 @@ def process_images(source: str,
 
         logger.debug(f'Found image: {image}')
 
-        new_name = unique_name(target_dir, image_path.name)
-        new_path = Path(target_dir) / new_name
+        new_path = copy_with_unique_name(target_dir, image_path)
+        if not new_path:
+            logger.warning(f'Image {image_path} does not exist! Skipping')
+            return match.group(0)
 
-        logger.debug(f'Copying image to: {new_path}')
-        shutil.copy(image_path, new_path)
         attachments.append(new_path)
 
         attrs = ' '.join(f'{k.replace("_", ":")}="{v}"' for k, v in attrs.items())
-        img_ref = f'<ac:image {attrs}><ri:attachment ri:filename="{new_name}"/></ac:image>'
+        img_ref = f'<ac:image {attrs}><ri:attachment ri:filename="{new_path.name}"/></ac:image>'
 
         logger.debug(f'Converted image ref: {img_ref}')
         return img_ref
@@ -175,14 +191,14 @@ def post_process_ac_image(escaped_content, parent_filename, attachments_dir):
         logger.debug(f'{src} does not exist, returning content as is')
         return escaped_content, attachments
 
-    new_name = unique_name(attachments_dir, src.name)
-    new_path = Path(attachments_dir) / new_name
+    new_path = copy_with_unique_name(attachments_dir, src)
+    if not new_path:
+        logger.warning(f'Image {src} does not exist, skipping')
+        return escaped_content
 
-    logger.debug(f'Copying image to: {new_path}')
-    shutil.copy(src, new_path)
     attachments.append(new_path)
 
-    ri_attachment.attrs['ri:filename'] = new_name
+    ri_attachment.attrs['ri:filename'] = new_path.name
     return str(root), attachments
 
 

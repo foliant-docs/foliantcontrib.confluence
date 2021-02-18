@@ -8,7 +8,7 @@ from foliant.preprocessors.utils.combined_options import Options
 from .wrapper import Page
 from .convert import (md_to_editor, process_images, post_process_ac_image,
                       editor_to_storage, add_comments, add_toc, set_up_logger,
-                      unique_name, crop_title)
+                      unique_name, copy_with_unique_name, crop_title)
 from .constants import REMOTE_ATTACHMENTS_DIR_NAME, ESCAPE_DIR_NAME
 
 
@@ -60,12 +60,22 @@ class PageUploader:
         new_content, attachments = process_images(new_content,
                                                   self.md_file_path.parent,
                                                   self.attachments_dir)
+
+        new_content, new_attachments = self.confluence_unescape(new_content)
+        attachments.extend(new_attachments)
+
+        for att in self.config.get('attachments', []):
+            att_path = copy_with_unique_name(self.attachments_dir, att)
+            if not att_path:
+                self.logger.warning(f'Attachment {att} does not exist, skipping')
+            else:
+                attachments.append(att_path)
+
         if not self.config['test_run']:
             self.page.update_attachments(
                 attachments,
                 self.cachedir / REMOTE_ATTACHMENTS_DIR_NAME
             )
-        new_content = self.confluence_unescape(new_content)
 
         if self.config['toc']:
             new_content = add_toc(new_content)
@@ -125,27 +135,29 @@ class PageUploader:
 
         Returns a modified source string with all escaped raw confluence code restored.
         '''
-
         def _sub(match):
             filename = match.group('hash')
             self.logger.debug(f'Restoring escaped confluence code with hash {filename}')
             filepath = Path(escape_dir) / filename
             with open(filepath) as f:
                 escaped_content = f.read()
-                return self.post_process_escaped_content(escaped_content)
+                result, new_attachments = self.post_process_escaped_content(escaped_content)
+                attachments.extend(new_attachments)
+                return result
+        attachments = []
         escape_dir = self.cachedir / ESCAPE_DIR_NAME
         pattern = re.compile(r"\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
-        return pattern.sub(_sub, source)
+        return pattern.sub(_sub, source), attachments
 
     def post_process_escaped_content(self, escaped_content: str):
         if escaped_content.lstrip().startswith('<ac:image'):
             result, attachments = post_process_ac_image(escaped_content, self.md_file_path, self.attachments_dir)
-            if attachments and not self.config['test_run']:
-                self.page.update_attachments(attachments,
-                                             self.cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
-            return result
+            # if attachments and not self.config['test_run']:
+            #     self.page.update_attachments(attachments,
+            #                                  self.cachedir / REMOTE_ATTACHMENTS_DIR_NAME)
+            return result, attachments
         else:
-            return escaped_content
+            return escaped_content, []
 
     def backup_debug_info(self):
         '''Copy debug files from the cachedir to debug dir'''

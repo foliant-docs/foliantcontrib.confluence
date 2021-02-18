@@ -210,7 +210,7 @@ class Backend(BaseBackend):
             self.logger.debug(f'Found "confluence" section in {section}), preparing to build.')
             # getting common options from foliant.yml and merging them with meta fields
             common_options = {}
-            uncommon_options = ['title', 'id', 'space_key', 'parent_id']
+            uncommon_options = ['title', 'id', 'space_key', 'parent_id', 'attachments']
             common_options = {k: v for k, v in self.options.items()
                               if k not in uncommon_options}
             try:
