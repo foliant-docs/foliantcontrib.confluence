@@ -160,6 +160,7 @@ class PageUploader:
                                                     self.config.get('space_key'),
                                                     self.config['test_run'])
                 self.logger.debug(f'Found parent id: {parent_id}')
+        return parent_id
 
     def confluence_unescape(self, source: str, attachment_manager: AttachmentManager) -> str:
         '''

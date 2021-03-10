@@ -1,3 +1,7 @@
+# 0.6.17
+
+- Fix: parent_id param didn't work.
+
 # 0.6.16
 
 - New: attaching arbitrary files with help of `attachments` parameter.
