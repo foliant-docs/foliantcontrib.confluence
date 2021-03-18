@@ -186,8 +186,8 @@ Lorem ipsum dolor sit amet, consectetur adipisicing elit. Explicabo quod omnis i
 
 <meta
     confluence="
-        title='System components'
-        space_key='~user'
+        title: 'System components'
+        space_key: '~user'
     ">
 </meta>
 
@@ -318,7 +318,7 @@ and you want to resize it to 600px and align to center, replace it with followin
 
 ```
 <ac:image ac:height="600" ac:align="center">
-<ri:attachment ri:filename="img/picture.png" />
+    <ri:attachment ri:filename="img/picture.png" />
 </ac:image>
 ```
 
