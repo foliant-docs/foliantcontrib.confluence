@@ -326,6 +326,17 @@ As you noticed, you should put path to your image right inside the `ri:filename`
 
 Here's [a link to Confluence docs](https://confluence.atlassian.com/doc/confluence-storage-format-790796544.html#ConfluenceStorageFormat-Images) about `ac:image` tag and all possible options.
 
+If you want to upload an external image, you can also use this approach, just insert that proper `ac:image` tag, no need for `raw_confluence`:
+
+```
+External image:
+
+
+<ac:image>
+<ri:url ri:value="http://confluence.atlassian.com/images/logo/confluence_48_trans.png" /></ac:image>
+```
+
+
 ### Code blocks processing
 
 Since 0.6.9 backend converts Markdown code blocks into Confluence code-block macros. You can tune the macros appearance by specifying some options in `codeblocks` config section of Confluence backend

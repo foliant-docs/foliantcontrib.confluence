@@ -165,72 +165,66 @@ def process_images(source: str,
 
 
 def post_process_ac_image(escaped_content, parent_filename, attachment_manager):
-    attachments = []
     if not escaped_content.strip().startswith('<ac:image'):
-        return escaped_content, attachments
+        return escaped_content
 
     logger.debug(f'Parsing confluence image: {escaped_content}')
     root = BeautifulSoup(escaped_content, 'html.parser')
     ac_image = root.find('ac:image')
     if not ac_image:
         logger.debug(f'ac:image tag not found, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     ri_attachment = ac_image.find('ri:attachment')
     if not ri_attachment:
         logger.debug(f'ri:attachment tag not found, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     src = ri_attachment.get('ri:filename')
     if not src:
         logger.debug(f'ri:filename attribute is not present, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     src = Path(src)
 
     if not src.exists():
         logger.debug(f'{src} does not exist, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     new_path = attachment_manager.add_attachment(src)
-
-    # attachments.append(new_path)
 
     ri_attachment.attrs['ri:filename'] = new_path.name
     return str(root)
 
 
 def post_process_ac_link(escaped_content, parent_filename, attachment_manager):
-    attachments = []
     if not escaped_content.strip().startswith('<ac:link'):
-        return escaped_content, attachments
+        return escaped_content
 
     logger.debug(f'Parsing confluence link: {escaped_content}')
     root = BeautifulSoup(escaped_content, 'html.parser')
     ac_link = root.find('ac:link')
     if not ac_link:
         logger.debug(f'ac:link tag not found, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     ri_attachment = ac_link.find('ri:attachment')
     if not ri_attachment:
         logger.debug(f'ri:attachment tag not found, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     src = ri_attachment.get('ri:filename')
     if not src:
         logger.debug(f'ri:filename attribute is not present, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     src = Path(src)
 
     if not src.exists():
         logger.debug(f'{src} does not exist, returning content as is')
-        return escaped_content, attachments
+        return escaped_content
 
     new_path = attachment_manager.add_attachment(src)
-
-    # attachments.append(new_path)
 
     ri_attachment.attrs['ri:filename'] = new_path.name
     return str(root)

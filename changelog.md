@@ -1,3 +1,7 @@
+# 0.6.18
+
+- Fix: external images didn't work.
+
 # 0.6.17
 
 - Fix: parent_id param didn't work.
