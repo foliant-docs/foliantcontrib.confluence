@@ -1,13 +1,23 @@
 import re
 import yaml
+
 from logging import getLogger
 from pathlib import PosixPath
 
-from pyparsing import (CharsNotIn, Group, Literal, nums, oneOf, OneOrMore,
-                       StringEnd, StringStart, Suppress, Word, ZeroOrMore)
 from bs4 import BeautifulSoup
+from pyparsing import CharsNotIn
+from pyparsing import Group
+from pyparsing import Literal
+from pyparsing import OneOrMore
+from pyparsing import StringEnd
+from pyparsing import StringStart
+from pyparsing import Suppress
+from pyparsing import Word
+from pyparsing import ZeroOrMore
+from pyparsing import nums
+from pyparsing import oneOf
 
-from foliant.preprocessors.utils.combined_options import CombinedOptions
+from foliant.contrib.combined_options import CombinedOptions
 
 logger = getLogger('flt.confluence_final')
 

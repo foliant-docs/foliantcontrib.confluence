@@ -1,11 +1,13 @@
 import re
 
+from collections import namedtuple
 from copy import copy
 from difflib import SequenceMatcher
-from collections import namedtuple
 from pprint import pformat
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup
+from bs4 import NavigableString
+from bs4 import Tag
 
 logger = None
 

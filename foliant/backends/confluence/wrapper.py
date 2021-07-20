@@ -2,10 +2,13 @@
 
 import os
 import shutil
+
 from filecmp import cmp
 from logging import getLogger
-from pathlib import PosixPath, Path
+from pathlib import Path
+from pathlib import PosixPath
 from urllib.parse import urlparse
+
 from atlassian import Confluence
 from bs4 import BeautifulSoup
 

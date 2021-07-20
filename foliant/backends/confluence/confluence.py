@@ -1,5 +1,5 @@
-import shutil
 import os
+import shutil
 import yaml
 
 from getpass import getpass
@@ -7,18 +7,25 @@ from getpass import getpass
 from atlassian import Confluence
 from requests.exceptions import HTTPError
 
-from foliant.utils import spinner, output
 from foliant.backends.base import BaseBackend
+from foliant.contrib.combined_options import Options
+from foliant.contrib.combined_options import val_type
 from foliant.meta.generate import load_meta
-from foliant.preprocessors import flatten, unescapecode
-from foliant.preprocessors.utils.combined_options import (Options, val_type)
+from foliant.preprocessors import flatten
+from foliant.preprocessors import unescapecode
+from foliant.utils import output
+from foliant.utils import spinner
 
+from .constants import ATTACHMENTS_DIR_NAME
+from .constants import CACHEDIR_NAME
+from .constants import DEBUG_DIR_NAME
+from .constants import ESCAPE_DIR_NAME
 from .uploader import PageUploader
-from .constants import CACHEDIR_NAME, ESCAPE_DIR_NAME, DEBUG_DIR_NAME, ATTACHMENTS_DIR_NAME
 
 # disabling confluence logger because it litters up output
-from unittest.mock import Mock
 import atlassian.confluence
+
+from unittest.mock import Mock
 atlassian.confluence.log = Mock()
 
 

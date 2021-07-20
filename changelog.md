@@ -1,3 +1,7 @@
+# 0.6.19
+
+- New utils module.
+
 # 0.6.18
 
 - Fix: external images didn't work.

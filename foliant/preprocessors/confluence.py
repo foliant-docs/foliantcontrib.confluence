@@ -3,17 +3,22 @@
 import os
 import re
 import yaml
-from pathlib import Path, PosixPath
+
 from getpass import getpass
-from subprocess import run, PIPE, STDOUT
+from pathlib import Path
+from pathlib import PosixPath
+from subprocess import PIPE
+from subprocess import STDOUT
+from subprocess import run
 
 from atlassian import Confluence
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
+from bs4 import Tag
 
-from foliant.utils import output
+from foliant.contrib.combined_options import CombinedOptions
 from foliant.preprocessors.confluence_final.process import SYNTAX_CONVERT
 from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
-from foliant.preprocessors.utils.combined_options import CombinedOptions
+from foliant.utils import output
 
 from foliant.backends.confluence.wrapper import Page
 

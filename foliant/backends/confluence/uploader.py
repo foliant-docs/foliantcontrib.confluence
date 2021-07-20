@@ -1,16 +1,26 @@
-import re
 import os
+import re
 import shutil
-from pathlib import Path, PosixPath
-from atlassian import Confluence
-from foliant.preprocessors.utils.combined_options import Options
 
+from atlassian import Confluence
+from foliant.contrib.combined_options import Options
+from pathlib import Path
+from pathlib import PosixPath
+
+from .constants import ESCAPE_DIR_NAME
+from .constants import REMOTE_ATTACHMENTS_DIR_NAME
+from .convert import add_comments
+from .convert import add_toc
+from .convert import copy_with_unique_name
+from .convert import crop_title
+from .convert import editor_to_storage
+from .convert import md_to_editor
+from .convert import post_process_ac_image
+from .convert import post_process_ac_link
+from .convert import process_images
+from .convert import set_up_logger
+from .convert import unique_name
 from .wrapper import Page
-from .convert import (md_to_editor, process_images, post_process_ac_image,
-                      post_process_ac_link,
-                      editor_to_storage, add_comments, add_toc, set_up_logger,
-                      unique_name, copy_with_unique_name, crop_title)
-from .constants import REMOTE_ATTACHMENTS_DIR_NAME, ESCAPE_DIR_NAME
 
 
 class BadParamsException(Exception):

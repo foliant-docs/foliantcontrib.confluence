@@ -1,15 +1,18 @@
-import re
 import os
+import re
 import shutil
 
-from pathlib import PosixPath, Path
-from subprocess import run, PIPE, STDOUT
+from pathlib import Path
+from pathlib import PosixPath
+from subprocess import PIPE
+from subprocess import STDOUT
+from subprocess import run
 
 from atlassian import Confluence
 from bs4 import BeautifulSoup
 
-from .wrapper import Page
 from .ref_diff import restore_refs
+from .wrapper import Page
 
 logger = None
 

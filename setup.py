@@ -16,7 +16,7 @@ setup(
     description=SHORT_DESCRIPTION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    version='0.6.18',
+    version='0.6.19',
     author='Daniil Minukhin',
     author_email='ddddsa@gmail.com',
     url='https://github.com/foliant-docs/foliantcontrib.confluence',
@@ -28,8 +28,7 @@ setup(
     install_requires=[
         'foliant>=1.0.8',
         'atlassian-python-api',
-        'foliantcontrib.utils.combined_options>=1.0.10',
-        'foliantcontrib.utils.preprocessor_ext>=1.0.3',
+        'foliantcontrib.utils>=1.0.2',
         'foliantcontrib.flatten>=1.0.5',
         'foliantcontrib.meta>=1.3.1',
         'pyparsing',

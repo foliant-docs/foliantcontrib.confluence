@@ -4,13 +4,16 @@ Confluence backend.
 '''
 
 import shutil
+
 from hashlib import md5
 
-from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 from foliant.meta.generate import load_meta
+from foliant.preprocessors.utils.preprocessor_ext import BasePreprocessorExt
 
-from .process import (process_code_blocks, process_task_lists, convert_image,
-                      convert_attachment)
+from .process import convert_attachment
+from .process import convert_image
+from .process import process_code_blocks
+from .process import process_task_lists
 
 
 class Preprocessor(BasePreprocessorExt):

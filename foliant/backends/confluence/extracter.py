@@ -2,6 +2,7 @@
 confluence page source'''
 
 import re
+
 from bs4 import BeautifulSoup
 
 OPEN_TAGS = ('foliant', 'foliant_start')
