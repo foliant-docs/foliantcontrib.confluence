@@ -58,6 +58,7 @@ backend_config:
     resolve_if_changed: false
     pandoc_path: pandoc
     verify_ssl: true
+    cloud: false
     attachments:
         - license.txt
         - project.pdf
@@ -117,6 +118,9 @@ backend_config:
 
 `verify_ssl`
 :   If `false`, SSL verification will be turned off. Sometimes when dealing with Confluence servers in Intranets it's easier to turn this option off rather than fight with admins. Not recommended to turn off for public servers in production. Default: `true`
+
+`cloud`
+:   If `true`, foliant will try to publish content without HTML code formatting, which introduces unwanted spaces and newlines when working with Confluence Cloud.
 
 `attachments`
 :   List of files (relative to project root) which should be attached to the Confluence page.
