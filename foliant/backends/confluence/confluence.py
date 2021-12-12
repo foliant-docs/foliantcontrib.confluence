@@ -52,7 +52,8 @@ class Backend(BaseBackend):
                 'notify_watchers': False,
                 'test_run': False,
                 'verify_ssl': True,
-                'passfile': 'confluence_secrets.yml'}
+                'passfile': 'confluence_secrets.yml',
+                'cloud': False}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

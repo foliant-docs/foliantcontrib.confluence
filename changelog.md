@@ -1,3 +1,9 @@
+# 0.6.20
+
+- Support for Confluence Cloud option to remove HTML formatting.
+- Page URL is now taken from the properties.
+- Article change is now detected by article body and title hash, stored in page properties.
+
 # 0.6.19
 
 - New utils module.

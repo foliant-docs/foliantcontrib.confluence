@@ -4,6 +4,7 @@ import os
 import shutil
 
 from filecmp import cmp
+from hashlib import md5
 from logging import getLogger
 from pathlib import Path
 from pathlib import PosixPath
@@ -33,6 +34,9 @@ class HTMLResponseError(Exception):
     pass
 
 
+HASH_PROPERTY_KEY = 'foliant_hash'
+
+
 class Page:
     def __init__(self,
                  connection: Confluence,
@@ -48,6 +52,9 @@ class Page:
         self._title = title
         self._id = id_
         self._check_params()
+
+        self._url = None
+        self._properties = {}
         self._get_info()
 
     def _check_params(self):
@@ -111,17 +118,23 @@ class Page:
     def parent_id(self):
         return self._parent_id
 
+    @property
+    def url(self):
+        return self._url
+
+    @property
+    def properties(self):
+        return self._properties
+
     def generate_new_body(self, new_content: str) -> str:
         '''
         Construct a new body of the page by surrounding `new_content` with static
         content from the page, and opening/closing foliant tags.
         # If there was no static content — just return the `new_content`.
         '''
-        MACRO = '''<p>
-  <ac:structured-macro ac:macro-id="0" ac:name="anchor" ac:schema-version="1">
-    <ac:parameter ac:name="">{name}</ac:parameter>
-  </ac:structured-macro>
-</p>'''
+        MACRO = ('<ac:structured-macro ac:macro-id="0" ac:name="anchor" '
+                 'ac:schema-version="1"><ac:parameter ac:name="">{name}'
+                 '</ac:parameter></ac:structured-macro>')
         # if self._before or self._after:
         result = self._before + MACRO.format(name="foliant_start")
         result += new_content + MACRO.format(name="foliant_end") + self._after
@@ -152,8 +165,17 @@ class Page:
         self._content = content
         self._id = content['id']
         self._before, self._body, self._after = extract(content['body']['storage']['value'])
+        for pp in self._con.get_page_properties(self._id).get('results', []):
+            self._properties[pp['key']] = pp['value']
+        if '_links' in self._content:
+            self._url = self._content['_links']['base'] + self._content['_links']['webui']
         if self.title is None:
             self._title = content['title']
+
+    def _calculate_hash(self, content: str, title: str) -> str:
+        _hash = md5(content.encode())
+        _hash.update(title.encode())
+        return _hash.hexdigest()
 
     def download_all_attachments(self, dest: PosixPath or str) -> dict:
         '''
@@ -258,18 +280,11 @@ class Page:
         if not self.exists:
             return True
 
-        # comparing content with bs4 prettify to get rid of insignificant
-        # formatting differences
-        result = True
-        old = BeautifulSoup(self.body.strip(), 'html.parser')
-        new = BeautifulSoup(new_content.strip(), 'html.parser')
-        result = old.prettify() != new.prettify()
-        # result = not\
-        #     self._con.is_page_content_is_already_updated(self.id, new_content)
-        if not result:
-            title = new_title or self.title
-            result = self.content['title'] != title
-        return result
+        if HASH_PROPERTY_KEY not in self.properties:
+            return True
+
+        content_hash = self._calculate_hash(new_content, new_title)
+        return content_hash != self.properties[HASH_PROPERTY_KEY]
 
     def upload_content(self,
                        new_content: str,
@@ -298,8 +313,21 @@ class Page:
         if isinstance(content, str) or 'statusCode' in content:
             raise RuntimeError(f"Can't create or update page:\n {content}")
         self._update_properties(content)
+        self.update_hash(new_content, title)
 
         return content
+
+    def update_hash(self, content: str, title: str) -> dict:
+        if HASH_PROPERTY_KEY in self.properties:
+            self._con.delete_page_property(self._id, HASH_PROPERTY_KEY)
+        data = {
+            'key': HASH_PROPERTY_KEY,
+            'value': self._calculate_hash(content, title)
+        }
+        result = self._con.set_page_property(self._id, data)
+        if isinstance(result, str) or 'statusCode' in result:
+            raise RuntimeError(f"Can't update page property:\n {result}")
+        self._properties[HASH_PROPERTY_KEY] = data['value']
 
     def get_resolved_comment_ids(self) -> list:
         if not self.exists:

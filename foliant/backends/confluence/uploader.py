@@ -18,6 +18,7 @@ from .convert import md_to_editor
 from .convert import post_process_ac_image
 from .convert import post_process_ac_link
 from .convert import process_images
+from .convert import unformat
 from .convert import set_up_logger
 from .convert import unique_name
 from .wrapper import Page
@@ -133,6 +134,8 @@ class PageUploader:
                                        new_content,
                                        self.config['resolve_if_changed'])
 
+        if self.config['cloud']:
+            new_content = unformat(new_content)
         need_update = self.page.need_update(new_content, title)
         with open(self.cachedir / '4_to_upload.html', 'w') as f:
             f.write(new_content)
@@ -149,11 +152,11 @@ class PageUploader:
         self.backup_debug_info()
 
         if self.config['test_run']:
-            return 'TEST RUN ' + ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
-                .format(host=self.config["host"].rstrip('/'), id=self.page.id, title=self.page.title)
+            return 'TEST RUN ' + ("* " * need_update) + '{url} ({title})'\
+                .format(url=self.page.url, title=self.page.title)
         else:
-            return ("* " * need_update) + '{host}/pages/viewpage.action?pageId={id} ({title})'\
-                .format(host=self.config["host"].rstrip('/'), id=self.page.id, title=self.page.title)
+            return ("* " * need_update) + '{url} ({title})'\
+                .format(url=self.page.url, title=self.page.title)
 
     def _get_parent_id(self):
         parent_id = None

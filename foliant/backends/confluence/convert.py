@@ -10,6 +10,8 @@ from subprocess import run
 
 from atlassian import Confluence
 from bs4 import BeautifulSoup
+from bs4 import NavigableString
+from bs4 import CData
 
 from .ref_diff import restore_refs
 from .wrapper import Page
@@ -299,6 +301,17 @@ def add_toc(source: str) -> str:
     result = '<ac:structured-macro ac:macro-id="1" '\
         'ac:name="toc" ac:schema-version="1"/>\n' + source
     return result
+
+
+def unformat(source: str):
+    """remove whitespaces around HTML tags"""
+    p = re.compile(r'^\n|(\n\s*)+$')
+    bs = BeautifulSoup(source, 'html.parser')
+    to_replace = [s for s in bs.strings if not isinstance(s, CData) and p.search(s)]
+    for s in to_replace:
+        new_string = p.sub('', s)
+        s.replace_with(NavigableString(new_string))
+    return str(bs)
 
 
 def set_up_logger(logger_):
