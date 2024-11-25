@@ -1,6 +1,6 @@
 # 0.6.21
 
-- Fixed unscaped hash in links which are not returned back after processing.
+- Fixed unescaped hash in links which are not returned back after processing.
 - Removed extra whitespace appeared after some processed links at the end of sentence in Confluence.
 
 # 0.6.20
