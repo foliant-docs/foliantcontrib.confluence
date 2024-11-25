@@ -192,10 +192,11 @@ class PageUploader:
                 escaped_content = f.read()
                 result = self.post_process_escaped_content(escaped_content, attachment_manager)
                 # attachments.extend(new_attachments)
-                return result
+                return result.rstrip(os.linesep)
         # attachments = []
         escape_dir = self.cachedir / ESCAPE_DIR_NAME
-        pattern = re.compile(r"\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
+        self.logger.warning(f'PageUploader confluence_unescape {escape_dir}')
+        pattern = re.compile(r"\[confluence_escaped[ \n\r]+hash=\%(?P<hash>.+?)\%\]")
         return pattern.sub(_sub, source)
 
     def post_process_escaped_content(self, escaped_content: str, attachment_manager: AttachmentManager):
