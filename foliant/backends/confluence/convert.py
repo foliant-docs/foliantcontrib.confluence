@@ -250,8 +250,9 @@ def confluence_unescape(source: str, escape_dir: str or PosixPath) -> str:
         logger.debug(f'Restoring escaped confluence code with hash {filename}')
         filepath = Path(escape_dir) / filename
         with open(filepath) as f:
-            return f.read()
-    pattern = re.compile(r"\[confluence_escaped hash=\%(?P<hash>.+?)\%\]")
+            return f.read().rstrip(os.linesep)
+    logger.warning(f'confluence_unescape {escape_dir}')
+    pattern = re.compile(r"\[confluence_escaped[ \n\r]+hash=\%(?P<hash>.+?)\%\]")
     return pattern.sub(_sub, source)
 
 
