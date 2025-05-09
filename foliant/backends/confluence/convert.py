@@ -43,15 +43,15 @@ def fix_pandoc_images(source: str) -> str:
         Convert image with pandoc <figcaption> tag into classic html image
         with caption in alt=""
         """
-        image_caption = match.group('caption')
+        image_caption = match.group('caption').replace("\n", " ")
         image_path = match.group('path')
         result = f'<img src="{image_path}" alt="{image_caption}">'
         logger.debug(f'\nold: {match.group(0)}\nnew: {result}')
         return result
 
-    image_pattern = re.compile(r'<figure>\s*<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)\s*</figure>')
-    return image_pattern.sub(_sub_image, source)
-
+    #image_pattern = re.compile(r'<figure>\s*<img src="(?P<path>.+?)" +(?:alt=".*?")?.+?>(?:<figcaption>(?P<caption>.*?)</figcaption>)\s*</figure>')
+    image_pattern = re.compile(r'<figure>\s*<img\s+src="(?P<path>.+?)"\s+(?:alt=".*?")?.+?>\s*(?:<figcaption\s*(?:.*?=".*?")?.*?>(?P<caption>.*?)</figcaption>)\s*</figure>', re.DOTALL)
+    return image_pattern.sub(_sub_image, source)   
 
 def md_to_editor(source: str, temp_dir: PosixPath, pandoc_path: str = 'pandoc'):
     """
@@ -151,9 +151,10 @@ def process_images(source: str,
 
         # attachments.append(new_path)
 
-        attrs = ' '.join(f'{k.replace("_", ":")}="{v}"' for k, v in attrs.items())
-        img_ref = f'<ac:image {attrs}><ri:attachment ri:filename="{new_path.name}"/></ac:image>'
+        attrs = ' '.join(f'{k.replace("_", ":").replace("alt", "ac:title")}="{v}"' for k, v in attrs.items())
+        img_ref = f'<p><ac:image {attrs}><ri:attachment ri:filename="{new_path.name}"/></ac:image></p>'
 
+        logger.debug(f'Attributes of image: {attrs}')
         logger.debug(f'Converted image ref: {img_ref}')
         return img_ref
 
