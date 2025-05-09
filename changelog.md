@@ -1,3 +1,9 @@
+# 0.6.22
+
+- Fix: alt captions of images were stacked up at the end of section.
+- Fix: alt captions didn't appear in browser. 
+- Fix: Imagemagick preprocessor now correctly handles the images without need of additional empty lines or line breaks <br />.
+
 # 0.6.21
 
 - Fixed unescaped hash in links which are not returned back after processing.
