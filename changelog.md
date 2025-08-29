@@ -1,3 +1,7 @@
+# 0.6.22
+
+- Added `atlassian-python-api` version which does not cause errors.
+
 # 0.6.21
 
 - Fixed unescaped hash in links which are not returned back after processing.
